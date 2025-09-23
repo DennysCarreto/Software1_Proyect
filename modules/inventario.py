@@ -1,18 +1,20 @@
 import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, 
-                            QVBoxLayout, QHBoxLayout, QWidget, QTableWidget, QTableWidgetItem, 
-                            QDialog, QDateEdit, QMessageBox, QHeaderView, QComboBox)
-from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QPalette, QColor
-from datetime import datetime
+                             QVBoxLayout, QHBoxLayout, QWidget, QTableWidget, QTableWidgetItem, 
+                             QDialog, QDateEdit, QMessageBox, QHeaderView, QComboBox, QFrame,
+                             QScrollArea, QSizePolicy)
+from PyQt6.QtCore import Qt, QDate, QPropertyAnimation, QEasingCurve, pyqtSignal
+from PyQt6.QtGui import QPalette, QColor, QIcon
+from datetime import datetime, timedelta
+from .noti2 import enviar_correo
 
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
-# Importar la clase de conexión
 from conexion import ConexionBD
 
+# --- La clase ProductDialog permanece igual ---
 class ProductDialog(QDialog):
+    # ... (Esta clase no cambia, puedes mantener la que ya tienes) ...
     def __init__(self, parent=None, product_data=None, proveedores=None):
         super().__init__(parent)
         self.setWindowTitle("Registrar / Editar Producto")
@@ -21,57 +23,39 @@ class ProductDialog(QDialog):
         self.layout = QVBoxLayout()
         self.proveedores = proveedores or []
     
-        # Campos del formulario
+        # Campos del formulario... (todo el contenido de ProductDialog queda igual)
         self.codigo_label = QLabel("Código:")
         self.codigo_input = QLineEdit()
-        
         self.nombre_label = QLabel("Nombre:")
         self.nombre_input = QLineEdit()
-        
         self.categoria_label = QLabel("Categoría:")
         self.categoria_input = QLineEdit()
-        
         self.stock_actual_label = QLabel("Stock Actual:")
         self.stock_actual_input = QLineEdit()
-        
         self.stock_minimo_label = QLabel("Stock Mínimo:")
         self.stock_minimo_input = QLineEdit()
-        
         self.precio_venta_label = QLabel("Precio Venta:")
         self.precio_venta_input = QLineEdit()
-        
         self.precio_compra_label = QLabel("Precio Compra:")
         self.precio_compra_input = QLineEdit()
-        
-        # Cambiar el input de proveedor por un combobox
         self.proveedor_label = QLabel("Proveedor:")
         self.proveedor_combo = QComboBox()
-        # Llenar el combobox con los proveedores
         for proveedor in self.proveedores:
             self.proveedor_combo.addItem(f"{proveedor['nombre']} {proveedor['apellido']}", proveedor['id'])
-        
         self.vencimiento_label = QLabel("Vencimiento:")
         self.vencimiento_input = QDateEdit()
         self.vencimiento_input.setCalendarPopup(True)
         self.vencimiento_input.setDate(QDate.currentDate())
-        
-        # Campo oculto para el ID (si estamos editando)
         self.product_id = None
-        
-        # Botones
         self.button_layout = QHBoxLayout()
         self.cancel_button = QPushButton("Cancel")
-        self.cancel_button.setStyleSheet("QPushButton { background-color: #ff6961; border-radius: 5px; padding: 5px; }")
+        self.cancel_button.setStyleSheet("background-color: #ff6961; border-radius: 5px; padding: 5px;")
         self.cancel_button.clicked.connect(self.reject)
-        
         self.ok_button = QPushButton("OK")
-        self.ok_button.setStyleSheet("QPushButton { background-color: #77dd77; border-radius: 5px; padding: 5px; }")
+        self.ok_button.setStyleSheet("background-color: #77dd77; border-radius: 5px; padding: 5px;")
         self.ok_button.clicked.connect(self.accept)
-        
         self.button_layout.addWidget(self.cancel_button)
         self.button_layout.addWidget(self.ok_button)
-        
-        # Añadir widgets al layout
         self.layout.addWidget(self.codigo_label)
         self.layout.addWidget(self.codigo_input)
         self.layout.addWidget(self.nombre_label)
@@ -91,10 +75,7 @@ class ProductDialog(QDialog):
         self.layout.addWidget(self.vencimiento_label)
         self.layout.addWidget(self.vencimiento_input)
         self.layout.addLayout(self.button_layout)
-        
         self.setLayout(self.layout)
-        
-        # Si se proporcionan datos, llenar el formulario
         if product_data:
             self.populate_form(product_data)
     
@@ -108,22 +89,18 @@ class ProductDialog(QDialog):
         self.precio_venta_input.setText(str(product_data.get('precioVenta', '')))
         self.precio_compra_input.setText(str(product_data.get('precioCompra', '')))
         
-        # Seleccionar el proveedor en el combobox
         proveedor_id = product_data.get('proveedor_id')
         if proveedor_id is not None:
             index = self.proveedor_combo.findData(proveedor_id)
             if index >= 0:
                 self.proveedor_combo.setCurrentIndex(index)
         
-        # Convertir la fecha de vencimiento de string a QDate
         if 'fVencimiento' in product_data and product_data['fVencimiento']:
             try:
-                # Si viene como string desde la base de datos
                 if isinstance(product_data['fVencimiento'], str):
                     date_obj = datetime.strptime(product_data['fVencimiento'], '%Y-%m-%d')
                     self.vencimiento_input.setDate(QDate(date_obj.year, date_obj.month, date_obj.day))
                 else:
-                    # Si ya viene como objeto datetime
                     self.vencimiento_input.setDate(QDate(
                         product_data['fVencimiento'].year,
                         product_data['fVencimiento'].month,
@@ -133,11 +110,10 @@ class ProductDialog(QDialog):
                 self.vencimiento_input.setDate(QDate.currentDate())
     
     def get_product_data(self):
-        # Obtener el ID del proveedor seleccionado
         proveedor_id = self.proveedor_combo.currentData()
         
         return {
-            'id': self.product_id,  # Puede ser None si es un nuevo producto
+            'id': self.product_id,
             'codigo': self.codigo_input.text(),
             'nombre': self.nombre_input.text(),
             'categoria': self.categoria_input.text(),
@@ -151,149 +127,316 @@ class ProductDialog(QDialog):
         }
 
 
+# ### <<< INICIO: NUEVA CLASE PARA TARJETA DE NOTIFICACIÓN INDIVIDUAL >>> ###
+class NotificationCard(QFrame):
+    dismissed = pyqtSignal()
+    send_email_requested = pyqtSignal(dict)
+
+    def __init__(self, icon, title, description, alert_data, color="#5DADE2"):
+        super().__init__()
+        self.alert_data = alert_data
+        
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setObjectName("NotificationCard")
+        self.setStyleSheet(f"""
+            #NotificationCard {{
+                background-color: {color};
+                border-radius: 10px;
+                border: 1px solid #FFFFFF;
+            }}
+        """)
+        
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        
+        icon_label = QLabel(icon)
+        icon_label.setStyleSheet("font-size: 24px; color: white;")
+        main_layout.addWidget(icon_label)
+        
+        text_layout = QVBoxLayout()
+        text_layout.setSpacing(2)
+        
+        title_label = QLabel(title)
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: white;")
+        
+        desc_label = QLabel(description)
+        desc_label.setStyleSheet("font-size: 12px; color: white;")
+        desc_label.setWordWrap(True)
+        
+        text_layout.addWidget(title_label)
+        text_layout.addWidget(desc_label)
+        main_layout.addLayout(text_layout, 1)
+
+        button_layout = QVBoxLayout()
+        
+        self.email_button = QPushButton("📧 Enviar")
+        # ESTILOS SIMPLIFICADOS Y CORREGIDOS
+        self.email_button.setStyleSheet("background-color: #3498DB; color: white; padding: 5px; border-radius: 5px; border: none;")
+        self.email_button.clicked.connect(lambda: self.send_email_requested.emit(self.alert_data))
+        
+        self.dismiss_button = QPushButton("Entendido")
+        # ESTILOS SIMPLIFICADOS Y CORREGIDOS
+        self.dismiss_button.setStyleSheet("background-color: #2ECC71; color: white; padding: 5px; border-radius: 5px; border: none;")
+        self.dismiss_button.clicked.connect(self.dismissed.emit)
+
+        button_layout.addWidget(self.email_button)
+        button_layout.addWidget(self.dismiss_button)
+        main_layout.addLayout(button_layout)
+
+# ### <<< FIN: NUEVA CLASE PARA TARJETA DE NOTIFICACIÓN >>> ###
+
+
 class InventarioWindow(QMainWindow):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, show_notifications_on_start=False):
         super().__init__(parent)
+        self.panel_bg_color = "#2C3E50"
         self.parent_window = parent
         self.setWindowTitle("Módulo de Inventario")
-        self.resize(900, 600)
+        self.resize(1200, 700)
         
-        # Establecer el color de fondo turquesa
         palette = self.palette()
         palette.setColor(QPalette.ColorRole.Window, QColor("#45B5AA"))
         self.setPalette(palette)
         
-        # Widget central y layout principal
         central_widget = QWidget()
-        main_layout = QVBoxLayout(central_widget)
+        self.setCentralWidget(central_widget)
         
-        # Título y botón de regresar
+        self.overall_layout = QHBoxLayout(central_widget)
+        self.overall_layout.setContentsMargins(0, 0, 0, 0)
+        self.overall_layout.setSpacing(0)
+
+        main_content_widget = QWidget()
+        main_layout = QVBoxLayout(main_content_widget)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.setup_notification_panel()
+        
+        self.overall_layout.addWidget(main_content_widget)
+        self.overall_layout.addWidget(self.notification_panel)
+        
+        self.setup_main_content_ui(main_layout)
+        
+        self.productos = []
+        self.proveedores = []
+        self.notification_count = 0
+        
+        self.cargar_proveedores()
+        self.cargar_productos()
+        
+        self.verificar_y_cargar_alertas()
+        
+        if show_notifications_on_start:
+            self.toggle_notification_panel()
+
+    def setup_main_content_ui(self, main_layout):
+        """Crea y añade toda la UI principal al layout proporcionado."""
         title_layout = QHBoxLayout()
-        
-        # Botón de regresar
         back_button = QPushButton("Regresar")
-        back_button.setStyleSheet("""
-            QPushButton {
-                background-color: #f0ad4e;
-                color: white;
-                border-radius: 5px;
-                padding: 5px 10px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #ec971f;
-            }
-        """)
+        back_button.setStyleSheet("background-color: #f0ad4e; color: white; border-radius: 5px; padding: 5px 10px; font-weight: bold; border: none;")
         back_button.clicked.connect(self.back)
         title_layout.addWidget(back_button)
         
-        # Título
         title_label = QLabel("Gestión de Inventario")
         title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
         title_layout.addWidget(title_label)
         title_layout.addStretch()
+
+        self.notification_button = QPushButton("🔔 (0)")
+        self.notification_button.setStyleSheet("background-color: #F39C12; color: white; border-radius: 15px; padding: 5px 10px; font-weight: bold; font-size: 16px; border: none;")
+        self.notification_button.clicked.connect(self.toggle_notification_panel)
+        title_layout.addWidget(self.notification_button)
         
         main_layout.addLayout(title_layout)
         
-        # Barra de búsqueda
         search_layout = QHBoxLayout()
-        
         self.nombre_input = QLineEdit()
         self.nombre_input.setPlaceholderText("Nombre")
-        
         self.codigo_input = QLineEdit()
         self.codigo_input.setPlaceholderText("Código")
-        
         self.categoria_input = QLineEdit()
         self.categoria_input.setPlaceholderText("Categoría")
-        
-        # Combobox para filtrar por proveedor
         self.proveedor_combo = QComboBox()
         self.proveedor_combo.setPlaceholderText("Proveedor")
-        self.proveedor_combo.addItem("Todos", -1)  # Opción para mostrar todos
-        
+        self.proveedor_combo.addItem("Todos", -1)
         self.buscar_button = QPushButton("Buscar")
-        self.buscar_button.setStyleSheet("QPushButton { background-color: white; border-radius: 5px; padding: 5px; }")
+        self.buscar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 5px;")
         self.buscar_button.clicked.connect(self.buscar_productos)
-        
         self.listar_button = QPushButton("Listar Todo")
-        self.listar_button.setStyleSheet("QPushButton { background-color: white; border-radius: 5px; padding: 5px; }")
+        self.listar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 5px;")
         self.listar_button.clicked.connect(self.listar_todos)
-        
         search_layout.addWidget(self.nombre_input)
         search_layout.addWidget(self.codigo_input)
         search_layout.addWidget(self.categoria_input)
         search_layout.addWidget(self.proveedor_combo)
         search_layout.addWidget(self.buscar_button)
         search_layout.addWidget(self.listar_button)
-        
         main_layout.addLayout(search_layout)
         
-        # Botones de acción
         action_layout = QHBoxLayout()
-        
         self.registrar_button = QPushButton("Registrar Producto")
-        self.registrar_button.setStyleSheet("QPushButton { background-color: white; border-radius: 5px; padding: 10px; }")
+        self.registrar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px;")
         self.registrar_button.clicked.connect(self.registrar_producto)
-        
         self.editar_button = QPushButton("Editar Producto")
-        self.editar_button.setStyleSheet("QPushButton { background-color: white; border-radius: 5px; padding: 10px; }")
+        self.editar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px;")
         self.editar_button.clicked.connect(self.editar_producto)
-        
         self.eliminar_button = QPushButton("Eliminar Producto")
-        self.eliminar_button.setStyleSheet("QPushButton { background-color: white; border-radius: 5px; padding: 10px; }")
+        self.eliminar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px;")
         self.eliminar_button.clicked.connect(self.eliminar_producto)
         
-        # Botón de limpiar
+        # ### <<< INICIO DE LA CORRECCIÓN >>> ###
         self.limpiar_button = QPushButton("Limpiar Tabla")
-        self.limpiar_button.setStyleSheet("""
-            QPushButton { 
-                background-color: #d9534f; 
-                color: white;
-                border-radius: 5px; 
-                padding: 10px; 
-            }
-            QPushButton:hover { 
-                background-color: #c9302c; 
-            }
-        """)
+        # Se reemplazó "..." por un estilo válido y funcional.
+        self.limpiar_button.setStyleSheet("background-color: #d9534f; color: white; border-radius: 5px; padding: 10px; border: none;")
         self.limpiar_button.clicked.connect(self.limpiar_tabla)
-        
+        # ### <<< FIN DE LA CORRECCIÓN >>> ###
+
         action_layout.addWidget(self.registrar_button)
         action_layout.addWidget(self.editar_button)
         action_layout.addWidget(self.eliminar_button)
         action_layout.addWidget(self.limpiar_button)
-        
         main_layout.addLayout(action_layout)
         
-        # Tabla de inventario
         self.table = QTableWidget()
         self.table.setColumnCount(10)
-        self.table.setHorizontalHeaderLabels([
-            "ID", "Código", "Nombre", "Categoría", "Stock Actual", "Stock Mínimo",
-            "Precio Venta", "Precio Compra", "Proveedor", "Vencimiento"
-        ])
-        
-        # Configurar el comportamiento de la tabla
+        self.table.setHorizontalHeaderLabels(["ID", "Código", "Nombre", "Categoría", "Stock Actual", "Stock Mínimo", "Precio Venta", "Precio Compra", "Proveedor", "Vencimiento"])
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        
         main_layout.addWidget(self.table)
+
+    def setup_notification_panel(self):
+        """Crea el panel lateral para las notificaciones."""
+        self.notification_panel = QFrame()
+        self.notification_panel.setFixedWidth(0) # Inicia oculto
+        self.notification_panel.setStyleSheet(f"background-color: {self.panel_bg_color};")
         
-        self.setCentralWidget(central_widget)
+        panel_layout = QVBoxLayout(self.notification_panel)
+        panel_layout.setContentsMargins(10, 10, 10, 10)
         
-        # Inicializar la lista de productos y proveedores
-        self.productos = []
-        self.proveedores = []
+        title_label = QLabel("Centro de Notificaciones")
+        title_label.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
+        panel_layout.addWidget(title_label)
         
-        # Cargar datos iniciales
-        self.cargar_proveedores()
-        self.cargar_productos()
-    
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setStyleSheet("QScrollArea { border: none; }")
+        
+        scroll_content = QWidget()
+        self.notification_list_layout = QVBoxLayout(scroll_content)
+        self.notification_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self.notification_list_layout.setSpacing(10)
+        
+        scroll_area.setWidget(scroll_content)
+        panel_layout.addWidget(scroll_area)
+
+    def toggle_notification_panel(self):
+        """Anima el panel para mostrarlo u ocultarlo."""
+        current_width = self.notification_panel.width()
+        target_width = 350 if current_width == 0 else 0
+        
+        self.animation = QPropertyAnimation(self.notification_panel, b"maximumWidth")
+        self.animation.setDuration(500) # 0.5 segundos
+        self.animation.setStartValue(current_width)
+        self.animation.setEndValue(target_width)
+        self.animation.setEasingCurve(QEasingCurve.Type.InOutCubic)
+        self.animation.start()
+
+    def verificar_y_cargar_alertas(self):
+        try:
+            conexion = ConexionBD.obtener_conexion()
+            cursor = conexion.cursor(dictionary=True)
+            
+            # Alertas de stock bajo
+            q_stock = "SELECT nombre, stockActual, stockMinimo FROM producto WHERE stockActual <= stockMinimo AND stockActual > 0"
+            cursor.execute(q_stock)
+            alertas_stock = cursor.fetchall()
+            
+            # Alertas de vencimiento
+            dias_vencer = 30
+            fecha_limite = (datetime.now() + timedelta(days=dias_vencer)).strftime('%Y-%m-%d')
+            q_vencimiento = "SELECT nombre, fVencimiento FROM producto WHERE fVencimiento BETWEEN CURDATE() AND %s"
+            cursor.execute(q_vencimiento, (fecha_limite,))
+            alertas_vencimiento = cursor.fetchall()
+            
+            cursor.close()
+
+            # Limpiar notificaciones anteriores
+            while self.notification_list_layout.count():
+                child = self.notification_list_layout.takeAt(0)
+                if child.widget():
+                    child.widget().deleteLater()
+            
+            self.notification_count = 0
+
+            # Crear tarjetas para stock bajo
+            for alerta in alertas_stock:
+                self.notification_count += 1
+                desc = f"Quedan {alerta['stockActual']} unidades (Mínimo: {alerta['stockMinimo']})"
+                card = NotificationCard("📦", alerta['nombre'], desc, alerta, color="#E67E22")
+                card.dismissed.connect(self.handle_dismissal)
+                card.send_email_requested.connect(self.handle_email_request_stock)
+                self.notification_list_layout.addWidget(card)
+            
+            # Crear tarjetas para vencimiento
+            for alerta in alertas_vencimiento:
+                self.notification_count += 1
+                fecha_vence = alerta['fVencimiento'].strftime('%d/%m/%Y')
+                desc = f"Vence el {fecha_vence}"
+                card = NotificationCard("⏳", alerta['nombre'], desc, alerta, color="#E74C3C")
+                card.dismissed.connect(self.handle_dismissal)
+                card.send_email_requested.connect(self.handle_email_request_vencimiento)
+                self.notification_list_layout.addWidget(card)
+            
+            # Actualizar contador de la campana
+            self.notification_button.setText(f"🔔 ({self.notification_count})")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error de Alertas", f"No se pudieron verificar las alertas: {e}")
+
+    def handle_dismissal(self):
+        """Oculta la tarjeta y actualiza el contador."""
+        card = self.sender()
+        if card:
+            card.hide()
+            self.notification_count -= 1
+            self.notification_button.setText(f"🔔 ({self.notification_count})")
+
+    def handle_email_request_stock(self, alert_data):
+        asunto = f"🚨 Alerta de Stock Bajo: {alert_data['nombre']}"
+        cuerpo = f"""
+        <h1>Alerta de Inventario</h1>
+        <p>El producto <strong>{alert_data['nombre']}</strong> ha alcanzado un nivel de stock bajo.</p>
+        <ul>
+            <li>Stock Actual: <strong>{alert_data['stockActual']}</strong></li>
+            <li>Stock Mínimo: {alert_data['stockMinimo']}</li>
+        </ul>
+        <p>Por favor, considere realizar un nuevo pedido.</p>
+        """
+        self.send_email(asunto, cuerpo)
+        
+    def handle_email_request_vencimiento(self, alert_data):
+        fecha_vence = alert_data['fVencimiento'].strftime('%d/%m/%Y')
+        asunto = f"🚨 Alerta de Vencimiento: {alert_data['nombre']}"
+        cuerpo = f"""
+        <h1>Alerta de Inventario</h1>
+        <p>El producto <strong>{alert_data['nombre']}</strong> está próximo a vencer.</p>
+        <ul>
+            <li>Fecha de Vencimiento: <strong>{fecha_vence}</strong></li>
+        </ul>
+        <p>Por favor, tome las acciones necesarias (promoción, rotación, etc.).</p>
+        """
+        self.send_email(asunto, cuerpo)
+
+    def send_email(self, asunto, cuerpo_html):
+        exito, mensaje = enviar_correo(asunto, cuerpo_html)
+        if exito:
+            QMessageBox.information(self, "Correo Enviado", mensaje)
+        else:
+            QMessageBox.critical(self, "Error de Envío", mensaje)
+
+            
     def cargar_proveedores(self):
-        """Cargar los proveedores desde la base de datos"""
         try:
             conexion = ConexionBD.obtener_conexion()
             cursor = conexion.cursor(dictionary=True)
@@ -301,7 +444,6 @@ class InventarioWindow(QMainWindow):
             cursor.execute("SELECT id, nombre, apellido FROM proveedor")
             self.proveedores = cursor.fetchall()
             
-            # Llenar el combobox de proveedores para filtrar
             self.proveedor_combo.clear()
             self.proveedor_combo.addItem("Todos", -1)
             for proveedor in self.proveedores:
@@ -315,12 +457,10 @@ class InventarioWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Error al cargar proveedores: {str(e)}")
     
     def cargar_productos(self):
-        """Cargar todos los productos desde la base de datos"""
         try:
             conexion = ConexionBD.obtener_conexion()
             cursor = conexion.cursor(dictionary=True)
             
-            # Consulta con JOIN para obtener el nombre del proveedor
             query = """
             SELECT p.*, CONCAT(prov.nombre, ' ', prov.apellido) as proveedor_nombre
             FROM producto p
@@ -338,12 +478,11 @@ class InventarioWindow(QMainWindow):
     def actualizar_tabla(self, productos_filtrados=None):
         productos_mostrados = productos_filtrados if productos_filtrados is not None else self.productos
         
-        self.table.setRowCount(0)  # Limpiar tabla
+        self.table.setRowCount(0)
         
         for row_index, producto in enumerate(productos_mostrados):
             self.table.insertRow(row_index)
             
-            # Columna ID (oculta para el usuario, pero útil para operaciones)
             id_item = QTableWidgetItem(str(producto['id']))
             self.table.setItem(row_index, 0, id_item)
             
@@ -355,11 +494,9 @@ class InventarioWindow(QMainWindow):
             self.table.setItem(row_index, 6, QTableWidgetItem(str(producto['precioVenta'])))
             self.table.setItem(row_index, 7, QTableWidgetItem(str(producto['precioCompra'])))
             
-            # Columna del proveedor (muestra el nombre, no el ID)
             proveedor_nombre = producto.get('proveedor_nombre', 'Sin proveedor')
             self.table.setItem(row_index, 8, QTableWidgetItem(proveedor_nombre))
             
-            # Formatear la fecha de vencimiento
             fecha_vencimiento = producto.get('fVencimiento', '')
             if fecha_vencimiento:
                 if isinstance(fecha_vencimiento, datetime):
@@ -370,11 +507,9 @@ class InventarioWindow(QMainWindow):
             else:
                 self.table.setItem(row_index, 9, QTableWidgetItem(""))
         
-        # Ocultar la columna ID
         self.table.setColumnHidden(0, True)
-    
+
     def registrar_producto(self):
-        """Registrar un nuevo producto en la base de datos"""
         dialog = ProductDialog(self, proveedores=self.proveedores)
         result = dialog.exec()
         
@@ -385,22 +520,15 @@ class InventarioWindow(QMainWindow):
                 conexion = ConexionBD.obtener_conexion()
                 cursor = conexion.cursor()
                 
-                # Insertar el nuevo producto
                 query = """
                 INSERT INTO producto (codigo, nombre, categoria, stockActual, stockMinimo,
-                                    precioVenta, precioCompra, proveedor_id, fVencimiento, fRegistro)
+                                      precioVenta, precioCompra, proveedor_id, fVencimiento, fRegistro)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """
                 valores = (
-                    nuevo_producto['codigo'],
-                    nuevo_producto['nombre'],
-                    nuevo_producto['categoria'],
-                    nuevo_producto['stockActual'],
-                    nuevo_producto['stockMinimo'],
-                    nuevo_producto['precioVenta'],
-                    nuevo_producto['precioCompra'],
-                    nuevo_producto['proveedor_id'],
-                    nuevo_producto['fVencimiento'],
+                    nuevo_producto['codigo'], nuevo_producto['nombre'], nuevo_producto['categoria'],
+                    nuevo_producto['stockActual'], nuevo_producto['stockMinimo'], nuevo_producto['precioVenta'],
+                    nuevo_producto['precioCompra'], nuevo_producto['proveedor_id'], nuevo_producto['fVencimiento'],
                     nuevo_producto['fRegistro']
                 )
                 
@@ -409,32 +537,25 @@ class InventarioWindow(QMainWindow):
                 cursor.close()
                 
                 QMessageBox.information(self, "Éxito", "Producto registrado correctamente")
-                self.cargar_productos()  # Recargar todos los productos
+                self.cargar_productos()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error al registrar producto: {str(e)}")
-    
+
     def editar_producto(self):
-        """Editar un producto existente"""
         selected_rows = self.table.selectedItems()
         
         if not selected_rows:
             QMessageBox.warning(self, "Advertencia", "Por favor seleccione un producto para editar")
             return
         
-        # Obtener el índice de la fila seleccionada
         selected_row = selected_rows[0].row()
-        
-        # Obtener el ID del producto seleccionado (está en la columna 0)
         producto_id = int(self.table.item(selected_row, 0).text())
-        
-        # Encontrar el producto seleccionado en la lista
         producto_seleccionado = next((p for p in self.productos if p['id'] == producto_id), None)
         
         if not producto_seleccionado:
             QMessageBox.warning(self, "Error", "No se pudo encontrar el producto seleccionado")
             return
         
-        # Abrir el diálogo de edición
         dialog = ProductDialog(self, producto_seleccionado, self.proveedores)
         result = dialog.exec()
         
@@ -445,7 +566,6 @@ class InventarioWindow(QMainWindow):
                 conexion = ConexionBD.obtener_conexion()
                 cursor = conexion.cursor()
                 
-                # Actualizar el producto
                 query = """
                 UPDATE producto
                 SET codigo = %s, nombre = %s, categoria = %s, stockActual = %s, stockMinimo = %s,
@@ -453,15 +573,9 @@ class InventarioWindow(QMainWindow):
                 WHERE id = %s
                 """
                 valores = (
-                    producto_editado['codigo'],
-                    producto_editado['nombre'],
-                    producto_editado['categoria'],
-                    producto_editado['stockActual'],
-                    producto_editado['stockMinimo'],
-                    producto_editado['precioVenta'],
-                    producto_editado['precioCompra'],
-                    producto_editado['proveedor_id'],
-                    producto_editado['fVencimiento'],
+                    producto_editado['codigo'], producto_editado['nombre'], producto_editado['categoria'],
+                    producto_editado['stockActual'], producto_editado['stockMinimo'], producto_editado['precioVenta'],
+                    producto_editado['precioCompra'], producto_editado['proveedor_id'], producto_editado['fVencimiento'],
                     producto_id
                 )
                 
@@ -470,12 +584,11 @@ class InventarioWindow(QMainWindow):
                 cursor.close()
                 
                 QMessageBox.information(self, "Éxito", "Producto actualizado correctamente")
-                self.cargar_productos()  # Recargar todos los productos
+                self.cargar_productos()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error al actualizar producto: {str(e)}")
     
     def eliminar_producto(self):
-        """Eliminar un producto de la base de datos"""
         selected_rows = self.table.selectedItems()
         
         if not selected_rows:
@@ -486,7 +599,6 @@ class InventarioWindow(QMainWindow):
         producto_id = int(self.table.item(selected_row, 0).text())
         nombre_producto = self.table.item(selected_row, 2).text()
         
-        # Confirmar eliminación
         confirmation = QMessageBox.question(
             self, "Confirmar eliminación", 
             f"¿Está seguro que desea eliminar el producto '{nombre_producto}'?",
@@ -498,29 +610,25 @@ class InventarioWindow(QMainWindow):
                 conexion = ConexionBD.obtener_conexion()
                 cursor = conexion.cursor()
                 
-                # Eliminar el producto
                 query = "DELETE FROM producto WHERE id = %s"
                 cursor.execute(query, (producto_id,))
                 conexion.commit()
                 cursor.close()
                 
                 QMessageBox.information(self, "Éxito", "Producto eliminado correctamente")
-                self.cargar_productos()  # Recargar todos los productos
+                self.cargar_productos()
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Error al eliminar producto: {str(e)}")
     
     def limpiar_tabla(self):
-        """Limpiar la visualización de la tabla sin eliminar los productos"""
         if self.table.rowCount() == 0:
             QMessageBox.information(self, "Información", "La tabla ya está vacía")
             return
         
-        # Simplemente vaciar la tabla sin modificar los datos
         self.table.setRowCount(0)
         QMessageBox.information(self, "Éxito", "Tabla limpiada correctamente")
     
     def buscar_productos(self):
-        """Buscar productos según los criterios especificados"""
         nombre = self.nombre_input.text().strip()
         codigo = self.codigo_input.text().strip()
         categoria = self.categoria_input.text().strip()
@@ -530,7 +638,6 @@ class InventarioWindow(QMainWindow):
             conexion = ConexionBD.obtener_conexion()
             cursor = conexion.cursor(dictionary=True)
             
-            # Construir la consulta base
             query = """
             SELECT p.*, CONCAT(prov.nombre, ' ', prov.apellido) as proveedor_nombre
             FROM producto p
@@ -540,20 +647,16 @@ class InventarioWindow(QMainWindow):
             
             parametros = []
             
-            # Añadir condiciones según los filtros ingresados
             if nombre:
                 query += " AND p.nombre LIKE %s"
                 parametros.append(f"%{nombre}%")
-            
             if codigo:
                 query += " AND p.codigo LIKE %s"
                 parametros.append(f"%{codigo}%")
-            
             if categoria:
                 query += " AND p.categoria LIKE %s"
                 parametros.append(f"%{categoria}%")
-            
-            if proveedor_id != -1:  # Si no es "Todos"
+            if proveedor_id != -1:
                 query += " AND p.proveedor_id = %s"
                 parametros.append(proveedor_id)
             
@@ -569,25 +672,18 @@ class InventarioWindow(QMainWindow):
             QMessageBox.critical(self, "Error", f"Error al buscar productos: {str(e)}")
     
     def listar_todos(self):
-        """Limpiar los filtros y mostrar todos los productos"""
         self.nombre_input.clear()
         self.codigo_input.clear()
         self.categoria_input.clear()
-        self.proveedor_combo.setCurrentIndex(0)  # Seleccionar "Todos"
+        self.proveedor_combo.setCurrentIndex(0)
         self.cargar_productos()
     
     def back(self):
-        """Regresar y mostrar principal"""
-        from principal import MainWindow   # Importación dentro de la función para evitar el ciclo
-        
-        # Crear y mostrar la ventana principal
-        self.prin_window = MainWindow('Empleado')
-        self.prin_window.show()
-        
-        # Cerrar la ventana actual
-        self.close()
+        """Vuelve a mostrar la ventana principal que estaba oculta."""
+        if self.parent_window:
+            self.parent_window.show()
+        self.close() 
 
-# Solo ejecutar si se llama directamente
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = InventarioWindow()

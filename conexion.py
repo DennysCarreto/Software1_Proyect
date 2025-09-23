@@ -12,8 +12,8 @@ class ConexionBD:
                 ConexionBD._conexion = mysql.connector.connect(
                     host='localhost',
                     user='root',
-                    password='admin',
-                    database='farmaPlus'
+                    password='root',
+                    database='dbfarmaplus'
                 )
                 print("✅ Conexión establecida.")
             except Error as e:
