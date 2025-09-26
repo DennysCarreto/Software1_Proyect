@@ -21,6 +21,8 @@ class MainWindow(QMainWindow):
     def __init__(self, cargo):
         super().__init__()
         self.cargo = cargo
+        self.current_module = None  # Para mantener referencia del módulo actual
+        
 
         # ### <<< INICIO: NUEVO DISEÑO Y PALETA DE COLORES >>> ###
         self.setWindowTitle("Farma PLUS - Dashboard Principal")
@@ -50,13 +52,14 @@ class MainWindow(QMainWindow):
         # ### <<< FIN: NUEVO DISEÑO Y PALETA DE COLORES >>> ###
 
         # --- Barra superior ---
+    def setup_top_bar(self, main_layout): 
         top_layout = QHBoxLayout()
         title_label = QLabel("FARMA PLUS +")
         title_label.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
         title_label.setStyleSheet("color: #4FE632;") # Color turquesa vibrante
         top_layout.addWidget(title_label)
         top_layout.addStretch()
-
+        self.register_button = None 
         if self.cargo == "Gerente":
             register_button = self.create_top_button("👤 Registrar Usuario")
             register_button.clicked.connect(self.register_user)
@@ -201,9 +204,9 @@ class MainWindow(QMainWindow):
 
     def open_module(self, module_name, showAlerts=False):
         """Abre un módulo y OCULTA la ventana principal."""
-        
-      
-        self.current_module = None
+        if self.current_module:
+            self.current_module.close()
+            self.current_module = None
         
         if module_name == "ventas":
             self.current_module = VentasWindow(parent=self)
@@ -216,8 +219,23 @@ class MainWindow(QMainWindow):
         
         if self.current_module:
             self.current_module.show()
-            self.hide() 
+            #self.hide() 
 
+    def setup_modules_grid(self, main_layout): 
+        """Configura la grilla de módulos"""
+    def show_main_window(self):  
+        """Método para mostrar la ventana principal cuando se cierre un módulo"""
+        self.show()
+        self.raise_()
+        self.activateWindow()
+        self.load_notifications()
+
+    def closeEvent(self, event):  
+        """Asegurar que se cierren todos los módulos al cerrar la ventana principal"""
+        if self.current_module:
+            self.current_module.close()
+
+        event.accept()
     def register_user(self):
         self.register_window = VentanaRegistro()
         self.register_window.show()
