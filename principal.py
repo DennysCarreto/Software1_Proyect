@@ -21,52 +21,43 @@ class MainWindow(QMainWindow):
     def __init__(self, cargo):
         super().__init__()
         self.cargo = cargo
-        self.current_module = None  # Para mantener referencia del módulo actual
-        
+        self.current_module = None
 
-        # ### <<< INICIO: NUEVO DISEÑO Y PALETA DE COLORES >>> ###
         self.setWindowTitle("Farma PLUS - Dashboard Principal")
         self.setMinimumSize(1024, 768)
-        self.setStyleSheet("background-color: #1F2833;") # Fondo oscuro y moderno
+        self.setStyleSheet("background-color: #1F2833;")
 
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # Layout general con espacio para el panel de notificaciones
         self.overall_layout = QHBoxLayout(central_widget)
         self.overall_layout.setContentsMargins(0, 0, 0, 0)
         self.overall_layout.setSpacing(0)
 
-        # Contenedor principal para la UI del dashboard
         main_content_widget = QWidget()
         self.overall_layout.addWidget(main_content_widget, 1)
 
-        # Layout vertical para el contenido
         main_layout = QVBoxLayout(main_content_widget)
         main_layout.setContentsMargins(40, 20, 40, 40)
         main_layout.setSpacing(20)
 
-        # Creamos el panel de notificaciones (estará oculto al inicio)
-        self.setup_notification_panel()
-        self.overall_layout.addWidget(self.notification_panel)
-        # ### <<< FIN: NUEVO DISEÑO Y PALETA DE COLORES >>> ###
+        # ### <<< INICIO DE LA CORRECCIÓN >>> ###
+        # La lógica para crear la UI ahora se ejecuta directamente aquí.
 
         # --- Barra superior ---
-    def setup_top_bar(self, main_layout): 
         top_layout = QHBoxLayout()
         title_label = QLabel("FARMA PLUS +")
         title_label.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
-        title_label.setStyleSheet("color: #4FE632;") # Color turquesa vibrante
+        title_label.setStyleSheet("color: #3A9D5A;") # Usando el Verde Acento
         top_layout.addWidget(title_label)
         top_layout.addStretch()
-        self.register_button = None 
+        
         if self.cargo == "Gerente":
             register_button = self.create_top_button("👤 Registrar Usuario")
             register_button.clicked.connect(self.register_user)
             top_layout.addWidget(register_button)
 
-        # Botón de campana para notificaciones
-        self.notification_button = self.create_top_button("🔔 (0)", color="#66FCF1", text_color="#1F2833")
+        self.notification_button = self.create_top_button("🔔 (0)", color="#ED8936", text_color="white")
         self.notification_button.clicked.connect(self.toggle_notification_panel)
         top_layout.addWidget(self.notification_button)
         
@@ -82,7 +73,6 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(grid_layout)
         main_layout.addStretch()
 
-        # Usamos nuestros nuevos botones animados
         ventas_module = AnimatedModuleButton("VENTAS", "images/venta.png")
         clientes_module = AnimatedModuleButton("CLIENTES", "images/cliente.png")
         inventario_module = AnimatedModuleButton("INVENTARIO", "images/inventario.png")
@@ -98,6 +88,12 @@ class MainWindow(QMainWindow):
         inventario_module.clicked.connect(lambda: self.open_module("inventario"))
         proveedores_module.clicked.connect(lambda: self.open_module("proveedores"))
 
+        # ### <<< FIN DE LA CORRECCIÓN >>> ###
+
+        # El panel de notificaciones se crea y se añade al final
+        self.setup_notification_panel()
+        self.overall_layout.addWidget(self.notification_panel)
+
         # Cargar notificaciones al iniciar
         self.load_notifications()
 
@@ -107,25 +103,19 @@ class MainWindow(QMainWindow):
         button.setFont(QFont("Segoe UI", 10, QFont.Weight.Bold))
         button.setStyleSheet(f"""
             QPushButton {{
-                background-color: {color};
-                color: {text_color};
-                border: none;
-                border-radius: 17px;
-                padding-left: 15px;
-                padding-right: 15px;
+                background-color: {color}; color: {text_color};
+                border: none; border-radius: 17px; padding: 0 15px;
             }}
-            QPushButton:hover {{
-                background-color: {self.adjust_color(color, -20)};
-            }}
+            QPushButton:hover {{ background-color: {self.adjust_color(color, -20)}; }}
         """)
-        
         return button
+
     def adjust_color(self, color, amount):
-        color = QColor(color)
-        h, s, l, a = color.getHsl()
+        qcolor = QColor(color)
+        h, s, l, a = qcolor.getHsl()
         l = max(0, min(255, l + amount))
-        color.setHsl(h, s, l, a)
-        return color.name()
+        qcolor.setHsl(h, s, l, a)
+        return qcolor.name()
 
     # ### <<< INICIO: FUNCIONES PARA EL CENTRO DE NOTIFICACIONES >>> ###
     def setup_notification_panel(self):
@@ -204,9 +194,7 @@ class MainWindow(QMainWindow):
 
     def open_module(self, module_name, showAlerts=False):
         """Abre un módulo y OCULTA la ventana principal."""
-        if self.current_module:
-            self.current_module.close()
-            self.current_module = None
+        self.current_module = None
         
         if module_name == "ventas":
             self.current_module = VentasWindow(parent=self)
@@ -219,7 +207,17 @@ class MainWindow(QMainWindow):
         
         if self.current_module:
             self.current_module.show()
-            #self.hide() 
+            self.hide() # <-- Reactivado para que la navegación funcione correctamente
+
+    def register_user(self):
+        self.register_window = VentanaRegistro()
+        self.register_window.show()
+
+    def logout(self):
+        from login import LoginWindow
+        self.login_window = LoginWindow()
+        self.login_window.show()
+        self.close()
 
     def setup_modules_grid(self, main_layout): 
         """Configura la grilla de módulos"""
@@ -236,15 +234,6 @@ class MainWindow(QMainWindow):
             self.current_module.close()
 
         event.accept()
-    def register_user(self):
-        self.register_window = VentanaRegistro()
-        self.register_window.show()
-
-    def logout(self):
-        from login import LoginWindow
-        self.login_window = LoginWindow()
-        self.login_window.show()
-        self.close()
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
