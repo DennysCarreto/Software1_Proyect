@@ -14,7 +14,6 @@ from conexion import ConexionBD
 
 # --- La clase ProductDialog permanece igual ---
 class ProductDialog(QDialog):
-    # ... (Esta clase no cambia, puedes mantener la que ya tienes) ...
     def __init__(self, parent=None, product_data=None, proveedores=None):
         super().__init__(parent)
         self.setWindowTitle("Registrar / Editar Producto")
@@ -23,7 +22,7 @@ class ProductDialog(QDialog):
         self.layout = QVBoxLayout()
         self.proveedores = proveedores or []
     
-        # Campos del formulario... (todo el contenido de ProductDialog queda igual)
+        # --- Campos del formulario ---
         self.codigo_label = QLabel("Código:")
         self.codigo_input = QLineEdit()
         self.nombre_label = QLabel("Nombre:")
@@ -40,15 +39,16 @@ class ProductDialog(QDialog):
         self.precio_compra_input = QLineEdit()
         self.proveedor_label = QLabel("Proveedor:")
         self.proveedor_combo = QComboBox()
-        for proveedor in self.proveedores:
-            self.proveedor_combo.addItem(f"{proveedor['nombre']} {proveedor['apellido']}", proveedor['id'])
+        if self.proveedores:
+            for proveedor in self.proveedores:
+                self.proveedor_combo.addItem(f"{proveedor['nombre']} {proveedor['apellido']}", proveedor['id'])
         self.vencimiento_label = QLabel("Vencimiento:")
         self.vencimiento_input = QDateEdit()
         self.vencimiento_input.setCalendarPopup(True)
         self.vencimiento_input.setDate(QDate.currentDate())
         self.product_id = None
         self.button_layout = QHBoxLayout()
-        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button = QPushButton("Cancelar")
         self.cancel_button.setStyleSheet("background-color: #ff6961; border-radius: 5px; padding: 5px;")
         self.cancel_button.clicked.connect(self.reject)
         self.ok_button = QPushButton("OK")
@@ -56,6 +56,7 @@ class ProductDialog(QDialog):
         self.ok_button.clicked.connect(self.accept)
         self.button_layout.addWidget(self.cancel_button)
         self.button_layout.addWidget(self.ok_button)
+        # --- Llenar Layout ---
         self.layout.addWidget(self.codigo_label)
         self.layout.addWidget(self.codigo_input)
         self.layout.addWidget(self.nombre_label)
@@ -78,7 +79,7 @@ class ProductDialog(QDialog):
         self.setLayout(self.layout)
         if product_data:
             self.populate_form(product_data)
-    
+
     def populate_form(self, product_data):
         self.product_id = product_data.get('id')
         self.codigo_input.setText(product_data.get('codigo', ''))
@@ -88,34 +89,25 @@ class ProductDialog(QDialog):
         self.stock_minimo_input.setText(str(product_data.get('stockMinimo', '')))
         self.precio_venta_input.setText(str(product_data.get('precioVenta', '')))
         self.precio_compra_input.setText(str(product_data.get('precioCompra', '')))
-        
         proveedor_id = product_data.get('proveedor_id')
         if proveedor_id is not None:
             index = self.proveedor_combo.findData(proveedor_id)
             if index >= 0:
                 self.proveedor_combo.setCurrentIndex(index)
-        
         if 'fVencimiento' in product_data and product_data['fVencimiento']:
             try:
-                if isinstance(product_data['fVencimiento'], str):
-                    date_obj = datetime.strptime(product_data['fVencimiento'], '%Y-%m-%d')
-                    self.vencimiento_input.setDate(QDate(date_obj.year, date_obj.month, date_obj.day))
-                else:
-                    self.vencimiento_input.setDate(QDate(
-                        product_data['fVencimiento'].year,
-                        product_data['fVencimiento'].month,
-                        product_data['fVencimiento'].day
-                    ))
+                date_obj = product_data['fVencimiento']
+                if isinstance(date_obj, str):
+                    date_obj = datetime.strptime(date_obj, '%Y-%m-%d')
+                self.vencimiento_input.setDate(QDate(date_obj.year, date_obj.month, date_obj.day))
             except (ValueError, AttributeError):
                 self.vencimiento_input.setDate(QDate.currentDate())
-    
+
     def get_product_data(self):
         proveedor_id = self.proveedor_combo.currentData()
-        
         return {
             'id': self.product_id,
-            'codigo': self.codigo_input.text(),
-            'nombre': self.nombre_input.text(),
+            'codigo': self.codigo_input.text(), 'nombre': self.nombre_input.text(),
             'categoria': self.categoria_input.text(),
             'stockActual': int(self.stock_actual_input.text() or 0),
             'stockMinimo': int(self.stock_minimo_input.text() or 0),
@@ -127,7 +119,6 @@ class ProductDialog(QDialog):
         }
 
 
-# ### <<< INICIO: NUEVA CLASE PARA TARJETA DE NOTIFICACIÓN INDIVIDUAL >>> ###
 class NotificationCard(QFrame):
     dismissed = pyqtSignal()
     send_email_requested = pyqtSignal(dict)
@@ -135,208 +126,234 @@ class NotificationCard(QFrame):
     def __init__(self, icon, title, description, alert_data, color="#5DADE2"):
         super().__init__()
         self.alert_data = alert_data
-        
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setObjectName("NotificationCard")
-        self.setStyleSheet(f"""
-            #NotificationCard {{
-                background-color: {color};
-                border-radius: 10px;
-                border: 1px solid #FFFFFF;
-            }}
-        """)
+        self.setStyleSheet(f"background-color: {color}; border-radius: 10px; border: 1px solid #FFFFFF;")
         
         main_layout = QHBoxLayout(self)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        
         icon_label = QLabel(icon)
-        icon_label.setStyleSheet("font-size: 24px; color: white;")
+        icon_label.setStyleSheet("font-size: 24px; color: white; background-color: transparent;")
         main_layout.addWidget(icon_label)
         
         text_layout = QVBoxLayout()
-        text_layout.setSpacing(2)
-        
         title_label = QLabel(title)
-        title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: white;")
-        
+        title_label.setStyleSheet("font-size: 14px; font-weight: bold; color: white; background-color: transparent;")
         desc_label = QLabel(description)
-        desc_label.setStyleSheet("font-size: 12px; color: white;")
+        desc_label.setStyleSheet("font-size: 12px; color: white; background-color: transparent;")
         desc_label.setWordWrap(True)
-        
         text_layout.addWidget(title_label)
         text_layout.addWidget(desc_label)
         main_layout.addLayout(text_layout, 1)
 
         button_layout = QVBoxLayout()
-        
         self.email_button = QPushButton("📧 Enviar")
-        # ESTILOS SIMPLIFICADOS Y CORREGIDOS
         self.email_button.setStyleSheet("background-color: #3498DB; color: white; padding: 5px; border-radius: 5px; border: none;")
         self.email_button.clicked.connect(lambda: self.send_email_requested.emit(self.alert_data))
-        
         self.dismiss_button = QPushButton("Entendido")
-        # ESTILOS SIMPLIFICADOS Y CORREGIDOS
         self.dismiss_button.setStyleSheet("background-color: #2ECC71; color: white; padding: 5px; border-radius: 5px; border: none;")
         self.dismiss_button.clicked.connect(self.dismissed.emit)
-
         button_layout.addWidget(self.email_button)
         button_layout.addWidget(self.dismiss_button)
         main_layout.addLayout(button_layout)
-
-# ### <<< FIN: NUEVA CLASE PARA TARJETA DE NOTIFICACIÓN >>> ###
 
 
 class InventarioWindow(QMainWindow):
     def __init__(self, parent=None, show_notifications_on_start=False):
         super().__init__(parent)
-        self.panel_bg_color = "#2C3E50"
         self.parent_window = parent
         self.setWindowTitle("Módulo de Inventario")
-        self.resize(1200, 700)
+        self.setMinimumSize(1200, 800)
         
+        self.colores = {
+            "fondo": "#F8F9FA", "cabecera": "#0B6E4F",
+            "texto_principal": "#212529", "texto_secundario": "#6C757D",
+            "acento": "#3A9D5A", "borde": "#DEE2E6", "peligro": "#E53E3E",
+            "panel_notificaciones": "#2D3748" # Color oscuro consistente
+        }
+        
+        self._create_stylesheets()
+
         palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Window, QColor("#45B5AA"))
+        palette.setColor(QPalette.ColorRole.Window, QColor(self.colores["fondo"]))
         self.setPalette(palette)
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
         self.overall_layout = QHBoxLayout(central_widget)
-        self.overall_layout.setContentsMargins(0, 0, 0, 0)
+        self.overall_layout.setContentsMargins(0,0,0,0)
         self.overall_layout.setSpacing(0)
 
         main_content_widget = QWidget()
-        main_layout = QVBoxLayout(main_content_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        
+        self.main_layout = QVBoxLayout(main_content_widget)
+        self.main_layout.setContentsMargins(0,0,0,0)
+        self.main_layout.setSpacing(15)
+
+        self.setup_header_bar()
+        self.setup_control_panel()
+        self.setup_table()
+
         self.setup_notification_panel()
-        
-        self.overall_layout.addWidget(main_content_widget)
+        self.overall_layout.addWidget(main_content_widget, 1)
         self.overall_layout.addWidget(self.notification_panel)
-        
-        self.setup_main_content_ui(main_layout)
         
         self.productos = []
         self.proveedores = []
         self.notification_count = 0
-        
         self.cargar_proveedores()
         self.cargar_productos()
-        
         self.verificar_y_cargar_alertas()
-        
         if show_notifications_on_start:
             self.toggle_notification_panel()
 
-    def setup_main_content_ui(self, main_layout):
-        """Crea y añade toda la UI principal al layout proporcionado."""
-        title_layout = QHBoxLayout()
+    def _create_stylesheets(self):
+        """Método central para definir todos los estilos de la ventana."""
+        self.style_header_label = f"font-size: 22px; font-weight: bold; color: white; background: transparent;"
+        self.style_header_button = f"""
+            QPushButton {{ background-color: #FFFFFF; color: {self.colores['texto_principal']};
+                border: none; border-radius: 5px; padding: 8px 12px; font-weight: bold;
+            }} QPushButton:hover {{ background-color: #E2E8F0; }}
+        """
+        self.style_notification_button = f"""
+            QPushButton {{ background-color: #ED8936; color: white; border: none;
+                border-radius: 15px; padding: 8px 12px; font-weight: bold; font-size: 14px;
+            }} QPushButton:hover {{ background-color: #DD781D; }}
+        """
+        self.style_input_field = f"""
+            QLineEdit, QComboBox {{ border: 1px solid {self.colores['borde']}; border-radius: 5px;
+                padding: 8px; font-size: 14px; background-color: white; color: {self.colores['texto_principal']};
+            }}
+        """
+        self.style_primary_button = f"""
+            QPushButton {{ background-color: {self.colores['acento']}; color: white;
+                border: none; border-radius: 5px; padding: 10px; font-weight: bold;
+            }} QPushButton:hover {{ background-color: {self.colores['cabecera']}; }}
+        """
+        self.style_danger_button = f"""
+            QPushButton {{ background-color: {self.colores['peligro']}; color: white;
+                border: none; border-radius: 5px; padding: 10px; font-weight: bold;
+            }} QPushButton:hover {{ background-color: #C53030; }}
+        """
+        self.style_table = f"""
+            QTableWidget {{ border: 1px solid {self.colores['borde']}; gridline-color: {self.colores['borde']}; font-size: 13px; }}
+            QHeaderView::section {{ background-color: {self.colores['cabecera']}; color: white; padding: 8px;
+                border: 1px solid {self.colores['cabecera']}; font-weight: bold;
+            }}
+            QTableWidget::item:selected {{ background-color: {self.colores['acento']}; color: white; }}
+        """
+
+    def setup_header_bar(self):
+        header_frame = QFrame()
+        header_frame.setStyleSheet(f"background-color: {self.colores['cabecera']};")
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(15, 10, 15, 10)
+
         back_button = QPushButton("Regresar")
-        back_button.setStyleSheet("background-color: #f0ad4e; color: white; border-radius: 5px; padding: 5px 10px; font-weight: bold; border: none;")
+        back_button.setStyleSheet(self.style_header_button)
         back_button.clicked.connect(self.back)
-        title_layout.addWidget(back_button)
         
         title_label = QLabel("Gestión de Inventario")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        title_layout.addWidget(title_label)
-        title_layout.addStretch()
+        title_label.setStyleSheet(self.style_header_label)
 
         self.notification_button = QPushButton("🔔 (0)")
-        self.notification_button.setStyleSheet("background-color: #F39C12; color: white; border-radius: 15px; padding: 5px 10px; font-weight: bold; font-size: 16px; border: none;")
+        self.notification_button.setStyleSheet(self.style_notification_button)
         self.notification_button.clicked.connect(self.toggle_notification_panel)
-        title_layout.addWidget(self.notification_button)
         
-        main_layout.addLayout(title_layout)
-        
+        header_layout.addWidget(back_button)
+        header_layout.addWidget(title_label)
+        header_layout.addStretch()
+        header_layout.addWidget(self.notification_button)
+        self.main_layout.addWidget(header_frame)
+
+    def setup_control_panel(self):
+        control_frame = QFrame()
+        control_frame.setObjectName("ControlFrame")
+        control_frame.setStyleSheet(f"#ControlFrame {{ margin: 0 10px; }}")
+        control_layout = QVBoxLayout(control_frame)
+        control_layout.setSpacing(15)
+
         search_layout = QHBoxLayout()
-        self.nombre_input = QLineEdit()
-        self.nombre_input.setPlaceholderText("Nombre")
-        self.codigo_input = QLineEdit()
-        self.codigo_input.setPlaceholderText("Código")
-        self.categoria_input = QLineEdit()
-        self.categoria_input.setPlaceholderText("Categoría")
+        self.nombre_input = QLineEdit(); self.nombre_input.setPlaceholderText("Nombre de Producto")
+        self.codigo_input = QLineEdit(); self.codigo_input.setPlaceholderText("Código")
         self.proveedor_combo = QComboBox()
-        self.proveedor_combo.setPlaceholderText("Proveedor")
-        self.proveedor_combo.addItem("Todos", -1)
         self.buscar_button = QPushButton("Buscar")
-        self.buscar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 5px;")
-        self.buscar_button.clicked.connect(self.buscar_productos)
-        self.listar_button = QPushButton("Listar Todo")
-        self.listar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 5px;")
-        self.listar_button.clicked.connect(self.listar_todos)
-        search_layout.addWidget(self.nombre_input)
-        search_layout.addWidget(self.codigo_input)
-        search_layout.addWidget(self.categoria_input)
-        search_layout.addWidget(self.proveedor_combo)
+        self.buscar_button.setStyleSheet(self.style_header_button)
+        self.listar_button = QPushButton("Mostrar Todo")
+        self.listar_button.setStyleSheet(self.style_header_button)
+        
+        self.nombre_input.setStyleSheet(self.style_input_field)
+        self.codigo_input.setStyleSheet(self.style_input_field)
+        self.proveedor_combo.setStyleSheet(self.style_input_field)
+        
+        search_layout.addWidget(self.nombre_input, 2)
+        search_layout.addWidget(self.codigo_input, 1)
+        search_layout.addWidget(self.proveedor_combo, 1)
         search_layout.addWidget(self.buscar_button)
         search_layout.addWidget(self.listar_button)
-        main_layout.addLayout(search_layout)
-        
-        action_layout = QHBoxLayout()
-        self.registrar_button = QPushButton("Registrar Producto")
-        self.registrar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px;")
-        self.registrar_button.clicked.connect(self.registrar_producto)
-        self.editar_button = QPushButton("Editar Producto")
-        self.editar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px;")
-        self.editar_button.clicked.connect(self.editar_producto)
-        self.eliminar_button = QPushButton("Eliminar Producto")
-        self.eliminar_button.setStyleSheet("background-color: white; border-radius: 5px; padding: 10px;")
-        self.eliminar_button.clicked.connect(self.eliminar_producto)
-        
-        # ### <<< INICIO DE LA CORRECCIÓN >>> ###
-        self.limpiar_button = QPushButton("Limpiar Tabla")
-        # Se reemplazó "..." por un estilo válido y funcional.
-        self.limpiar_button.setStyleSheet("background-color: #d9534f; color: white; border-radius: 5px; padding: 10px; border: none;")
-        self.limpiar_button.clicked.connect(self.limpiar_tabla)
-        # ### <<< FIN DE LA CORRECCIÓN >>> ###
+        control_layout.addLayout(search_layout)
 
+        action_layout = QHBoxLayout()
+        self.registrar_button = QPushButton("➕ Registrar Producto")
+        self.editar_button = QPushButton("✏️ Editar Seleccionado")
+        self.eliminar_button = QPushButton("❌ Eliminar Seleccionado")
+        self.limpiar_button = QPushButton("🗑️ Limpiar Tabla")
+
+        self.registrar_button.setStyleSheet(self.style_primary_button)
+        self.editar_button.setStyleSheet(self.style_header_button)
+        self.eliminar_button.setStyleSheet(self.style_danger_button)
+        self.limpiar_button.setStyleSheet(self.style_header_button) # Neutral style for a less destructive look
+
+        self.registrar_button.clicked.connect(self.registrar_producto)
+        self.editar_button.clicked.connect(self.editar_producto)
+        self.eliminar_button.clicked.connect(self.eliminar_producto)
+        self.limpiar_button.clicked.connect(self.limpiar_tabla)
+        self.buscar_button.clicked.connect(self.buscar_productos)
+        self.listar_button.clicked.connect(self.listar_todos)
+        
         action_layout.addWidget(self.registrar_button)
         action_layout.addWidget(self.editar_button)
-        action_layout.addWidget(self.eliminar_button)
+        action_layout.addStretch()
         action_layout.addWidget(self.limpiar_button)
-        main_layout.addLayout(action_layout)
+        action_layout.addWidget(self.eliminar_button)
+        control_layout.addLayout(action_layout)
         
+        self.main_layout.addWidget(control_frame)
+
+    def setup_table(self):
         self.table = QTableWidget()
         self.table.setColumnCount(10)
-        self.table.setHorizontalHeaderLabels(["ID", "Código", "Nombre", "Categoría", "Stock Actual", "Stock Mínimo", "Precio Venta", "Precio Compra", "Proveedor", "Vencimiento"])
+        self.table.setHorizontalHeaderLabels(["ID", "Código", "Nombre", "Categoría", "Stock", "Mínimo", "P. Venta", "P. Compra", "Proveedor", "Vencimiento"])
         self.table.setAlternatingRowColors(True)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        main_layout.addWidget(self.table)
-
+        self.table.verticalHeader().setVisible(False)
+        self.table.setStyleSheet(self.style_table)
+        self.main_layout.addWidget(self.table)
+        
     def setup_notification_panel(self):
-        """Crea el panel lateral para las notificaciones."""
         self.notification_panel = QFrame()
-        self.notification_panel.setFixedWidth(0) # Inicia oculto
-        self.notification_panel.setStyleSheet(f"background-color: {self.panel_bg_color};")
-        
+        self.notification_panel.setFixedWidth(0)
+        self.notification_panel.setStyleSheet(f"background-color: {self.colores['panel_notificaciones']}; border-left: 2px solid {self.colores['cabecera']};")
         panel_layout = QVBoxLayout(self.notification_panel)
-        panel_layout.setContentsMargins(10, 10, 10, 10)
-        
-        title_label = QLabel("Centro de Notificaciones")
-        title_label.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
+        title_label = QLabel("Notificaciones")
+        title_label.setStyleSheet("color: white; font-size: 16px; font-weight: bold; background: transparent;")
         panel_layout.addWidget(title_label)
-        
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("QScrollArea { border: none; }")
-        
+        scroll_area.setStyleSheet("QScrollArea { border: none; background: transparent; } QWidget { background: transparent; }")
         scroll_content = QWidget()
         self.notification_list_layout = QVBoxLayout(scroll_content)
         self.notification_list_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
-        self.notification_list_layout.setSpacing(10)
-        
         scroll_area.setWidget(scroll_content)
         panel_layout.addWidget(scroll_area)
 
     def toggle_notification_panel(self):
-        """Anima el panel para mostrarlo u ocultarlo."""
         current_width = self.notification_panel.width()
         target_width = 350 if current_width == 0 else 0
-        
-        self.animation = QPropertyAnimation(self.notification_panel, b"maximumWidth")
-        self.animation.setDuration(500) # 0.5 segundos
+        self.animation = QPropertyAnimation(self, b"maximumWidth")
+        self.animation.setTargetObject(self.notification_panel)
+        self.animation.setDuration(400)
         self.animation.setStartValue(current_width)
         self.animation.setEndValue(target_width)
         self.animation.setEasingCurve(QEasingCurve.Type.InOutCubic)

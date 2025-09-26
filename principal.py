@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
         top_layout = QHBoxLayout()
         title_label = QLabel("FARMA PLUS +")
         title_label.setFont(QFont("Segoe UI", 28, QFont.Weight.Bold))
-        title_label.setStyleSheet("color: #66FCF1;") # Color turquesa vibrante
+        title_label.setStyleSheet("color: #4FE632;") # Color turquesa vibrante
         top_layout.addWidget(title_label)
         top_layout.addStretch()
 

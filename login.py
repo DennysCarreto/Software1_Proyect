@@ -1,110 +1,114 @@
 import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QLabel, QLineEdit, QPushButton, QMessageBox)
-from PyQt6.QtGui import QPixmap, QFont, QIcon
+from PyQt6.QtGui import QPixmap, QFont, QIcon, QAction
 from PyQt6.QtCore import Qt, QSize
 from principal import MainWindow 
 import mysql.connector
 from conexion import ConexionBD
 #from principal import MainWindow
-
 class LoginWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         
-        # Ventana principal
         self.setWindowTitle("Farma PLUS - Login")
         self.setFixedSize(500, 600)
-        self.setStyleSheet("background-color: #45B5AA;")  # Color turquesa 
+        self.setStyleSheet("background-color: #1A202C;")
         
-        # Widget central
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         layout = QVBoxLayout(central_widget)
         layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.setSpacing(15)
         
-        # Titulo de bienvenida
-        welcome_label = QLabel("Bienvenido...")
-        welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        welcome_label.setFont(QFont("Arial", 24, QFont.Weight.Bold))
-        welcome_label.setStyleSheet("color: #333333;")
-        layout.addWidget(welcome_label)
-        
-        # Logo
+        layout.addStretch() # Para centrar verticalmente
+
         logo_container = QWidget()
-        logo_container.setFixedSize(220, 220)
-        logo_container.setStyleSheet("background-color: #D1F0EC; border-radius: 10px;")
-        
+        logo_container.setFixedSize(250, 180)
+        logo_container.setStyleSheet("background-color: #2D3748; border-radius: 15px;")
         logo_layout = QVBoxLayout(logo_container)
-        logo_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        
         logo_label = QLabel()
-        # Tener un archivo logo.png en la misma carpeta o especificar la ruta correcta
         logo_pixmap = QPixmap("images/logo.png")
-        if not logo_pixmap.isNull():
-            logo_label.setPixmap(logo_pixmap.scaled(180, 180, Qt.AspectRatioMode.KeepAspectRatio))
-        else:
-            # Si no hay logo disponible, mostrar texto
-            logo_label.setText("FARMA PLUS")
-            logo_label.setFont(QFont("Arial", 18, QFont.Weight.Bold))
-            logo_label.setStyleSheet("color: #0B6654;")
+        logo_label.setPixmap(logo_pixmap.scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
+        logo_layout.addWidget(logo_label, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(logo_container, alignment=Qt.AlignmentFlag.AlignCenter)
         
-        logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        logo_layout.addWidget(logo_label)
-        layout.addWidget(logo_container)
-        
-        # Espacio
-        layout.addSpacing(20)
-        
-        # Usuario
-        user_label = QLabel("Usuario")
-        user_label.setFont(QFont("Arial", 16))
-        user_label.setStyleSheet("color: #333333;")
-        layout.addWidget(user_label)
+        input_style = """
+            QLineEdit {
+                background-color: #2D3A48;
+                border: 1px solid #3A9D5A; /* <<< CAMBIO AQUÍ */
+                border-radius: 5px;
+                padding: 8px 12px;
+                color: #FFFFFF;
+                font-family: "Roboto";
+                font-size: 15px;       
+            }
+        """
         
         self.user_input = QLineEdit()
-        self.user_input.setFixedSize(230, 30)
-        self.user_input.setStyleSheet("background-color: white; border-radius: 3px;")
+        self.user_input.setPlaceholderText("Nombre de Usuario")
+        self.user_input.setFixedSize(300, 40)
+        self.user_input.setStyleSheet(input_style)
         layout.addWidget(self.user_input, alignment=Qt.AlignmentFlag.AlignCenter)
         
-        # Espacio
-        layout.addSpacing(10)
-        
-        # Contraseña
-        pwd_label = QLabel("Contraseña")
-        pwd_label.setFont(QFont("Arial", 16))
-        pwd_label.setStyleSheet("color: #333333;")
-        layout.addWidget(pwd_label)
-        
         self.pwd_input = QLineEdit()
-        self.pwd_input.setFixedSize(230, 30)
-        self.pwd_input.setStyleSheet("background-color: white; border-radius: 3px;")
+        self.pwd_input.setPlaceholderText("Contraseña")
+        self.pwd_input.setFixedSize(300, 40)
         self.pwd_input.setEchoMode(QLineEdit.EchoMode.Password)
+        self.pwd_input.setStyleSheet(input_style)
+        
+        # ### <<< INICIO: LÓGICA DEL ICONO DE OJO >>> ###
+        pixmap_closed = QPixmap("images/ocultar.png").scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        pixmap_open = QPixmap("images/abrir.png").scaled(24, 24, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+
+        # Creamos el QIcon a partir del Pixmap redimensionado
+        self.eye_icon_closed = QIcon(pixmap_closed)
+        self.eye_icon_open = QIcon(pixmap_open)
+        
+        self.toggle_password_action = QAction(self.eye_icon_closed, "Mostrar/Ocultar Contraseña", self)
+        
+        self.pwd_input.addAction(self.toggle_password_action, QLineEdit.ActionPosition.TrailingPosition)
+        
+        self.toggle_password_action.triggered.connect(self.toggle_password_visibility)
+        # ### <<< FIN: LÓGICA DEL ICONO DE OJO >>> ###
+
         layout.addWidget(self.pwd_input, alignment=Qt.AlignmentFlag.AlignCenter)
         
-        # Espacio
-        layout.addSpacing(20)
+        layout.addSpacing(10)
         
-        # Botón de login
         login_button = QPushButton("Ingresar")
-        login_button.setFixedSize(120, 40)
+        login_button.setFixedSize(300, 45)
+        login_button.setCursor(Qt.CursorShape.PointingHandCursor)
         login_button.setStyleSheet("""
             QPushButton {
-                background-color: #0B6654;
-                color: white;
-                border-radius: 5px;
-                font-size: 14px;
+                background-color: #3A9D5A; /* <<< CAMBIO AQUÍ */
+                color: #FFFFFF; /* Cambiamos el texto a blanco para mejor contraste */
+                border-radius: 5px; 
+                font-size: 16px; 
                 font-weight: bold;
             }
-            QPushButton:hover {
-                background-color: #0A5A4A;
+            QPushButton:hover { 
+                background-color: #278E43; /* Un verde un poco más oscuro para el hover */
             }
         """)
         login_button.clicked.connect(self.login)
         layout.addWidget(login_button, alignment=Qt.AlignmentFlag.AlignCenter)
         
-        # Espacio al final
-        layout.addSpacing(30)
+        layout.addStretch() # Para centrar verticalmente
+    
+    def toggle_password_visibility(self):
+        """
+        Cambia el modo de visualización de la contraseña y el icono.
+        """
+        if self.pwd_input.echoMode() == QLineEdit.EchoMode.Password:
+            # Si está oculto, mostrarlo
+            self.pwd_input.setEchoMode(QLineEdit.EchoMode.Normal)
+            self.toggle_password_action.setIcon(self.eye_icon_open)
+        else:
+            # Si se está mostrando, ocultarlo
+            self.pwd_input.setEchoMode(QLineEdit.EchoMode.Password)
+            self.toggle_password_action.setIcon(self.eye_icon_closed)
+
     def encriptarContraseña(self,contrasena):
         clave = 3  # Desplazamiento para el cifrado (puedes elegir cualquier número)
 
