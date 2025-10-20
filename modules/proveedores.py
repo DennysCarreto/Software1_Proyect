@@ -100,8 +100,8 @@ class ProveedoresWindow(QMainWindow):
         self.telefono_input = QLineEdit()
         for field in [self.nombre_input, self.apellido_input, self.telefono_input]:
             field.setStyleSheet(self.style_input_field)
-        data_entry_layout.addRow(QLabel("Nombre:"), self.nombre_input)
-        data_entry_layout.addRow(QLabel("Apellido:"), self.apellido_input)
+        data_entry_layout.addRow(QLabel("Nombre Proveedor:"), self.nombre_input)
+        data_entry_layout.addRow(QLabel("Marca:"), self.apellido_input)
         data_entry_layout.addRow(QLabel("Teléfono:"), self.telefono_input)
         form_layout.addLayout(data_entry_layout)
         action_layout = QHBoxLayout()

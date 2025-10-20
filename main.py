@@ -8,11 +8,10 @@ from login import MainWindow
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Farma PLUS")
-    app.setOrganizationName("Farma PLUS")    
-    # Icono a la aplicación
-    # app.setWindowIcon(QIcon("icon.png"))
+    app.setOrganizationName("Farma PLUS")   
+   
     
-    # Iniciar ventana de login
+    # Iniciar ventana de login  
     login = LoginWindow()
     login.show()
     
