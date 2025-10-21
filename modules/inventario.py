@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, QLi
 from PyQt6.QtCore import Qt, QDate, QPropertyAnimation, QEasingCurve, pyqtSignal
 from PyQt6.QtGui import QPalette, QColor, QIcon
 from datetime import datetime, timedelta
+from .categorias_dialog import CategoriasDialog
 from .noti2 import enviar_correo
 
 import os
@@ -151,6 +152,25 @@ class ProductDialog(QDialog):
             'fVencimiento': self.vencimiento_input.date().toString("yyyy-MM-dd") or None,
             'fRegistro': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
+    
+    def actualizar_lista_categorias(self, nuevas_categorias):
+        """Limpia y rellena el ComboBox de categorías con datos actualizados."""
+        # Guardar el ID de la categoría seleccionada actualmente (si hay alguna)
+        current_id = self.categoria_combo.currentData()
+
+        # Limpiar el ComboBox
+        self.categoria_combo.clear()
+
+        # Actualizar la lista interna y rellenar el ComboBox
+        self.categorias = nuevas_categorias or []
+        if self.categorias:
+            for cat in self.categorias:
+                self.categoria_combo.addItem(cat['nombre_categoria'], cat['id'])
+
+        # Intentar volver a seleccionar la categoría que estaba seleccionada
+        index = self.categoria_combo.findData(current_id)
+        if index >= 0:
+            self.categoria_combo.setCurrentIndex(index)
 
 
 class NotificationCard(QFrame):
@@ -197,7 +217,7 @@ class InventarioWindow(QMainWindow):
         self.parent_window = parent
         self.setWindowTitle("Módulo de Inventario")
         self.setMinimumSize(1200, 800)
-        
+        self.current_product_dialog = None
         self.colores = {
             "fondo": "#F8F9FA", "cabecera": "#0B6E4F",
             "texto_principal": "#212529", "texto_secundario": "#6C757D",
@@ -354,9 +374,13 @@ class InventarioWindow(QMainWindow):
         self.eliminar_button.setStyleSheet(self.style_danger_button)
         self.limpiar_button.setStyleSheet(self.style_header_button)
 
+        self.gestionar_categorias_btn = QPushButton("📁 Gestionar Categorías")
+        self.gestionar_categorias_btn.setStyleSheet(self.style_header_button)
+
         # Añade botones al action_layout
         action_layout.addWidget(self.registrar_button)
         action_layout.addWidget(self.editar_button)
+        action_layout.addWidget(self.gestionar_categorias_btn)
         action_layout.addStretch()
         action_layout.addWidget(self.limpiar_button)
         action_layout.addWidget(self.eliminar_button)
@@ -370,6 +394,7 @@ class InventarioWindow(QMainWindow):
         self.editar_button.clicked.connect(self.editar_producto)
         self.eliminar_button.clicked.connect(self.eliminar_producto)
         self.limpiar_button.clicked.connect(self.limpiar_tabla_visual)
+        self.gestionar_categorias_btn.clicked.connect(self.abrir_gestion_categorias)
         
         # Conexiones de botones/campos de búsqueda
         self.buscar_button.clicked.connect(self.buscar_productos_db)
@@ -699,7 +724,38 @@ class InventarioWindow(QMainWindow):
             msgBox.setIcon(QMessageBox.Icon.Information)
             
         msgBox.exec()
-    # ### <<< FIN: FUNCIÓN PARA ALERTAS PERSONALIZADAS >>> ###
+    
+    def abrir_gestion_categorias(self):
+        """Abre el diálogo para gestionar categorías."""
+        # Pasamos 'self' como padre para que herede estilos y pueda emitir la señal
+        dialog = CategoriasDialog(parent=self) 
+        # Conectamos la señal del diálogo a nuestra función de recarga
+        dialog.categories_updated.connect(self.recargar_datos_categorias)
+        dialog.exec() # Abre el diálogo de forma modal
+
+    def recargar_datos_categorias(self):
+        """Recarga la lista de categorías y actualiza los ComboBox."""
+        print("DEBUG: Recargando categorías después de la actualización...")
+
+        # Guardar el ID seleccionado actualmente en el filtro (si existe)
+        current_filter_cat_id = self.categoria_filtro_combo.currentData()
+
+        # Volver a cargar las categorías desde la BD
+        self.cargar_categorias() # Esto actualiza self.categorias y self.categoria_filtro_combo
+
+        # Intentar restaurar la selección del filtro
+        index_filtro = self.categoria_filtro_combo.findData(current_filter_cat_id)
+        if index_filtro >= 0:
+            self.categoria_filtro_combo.setCurrentIndex(index_filtro)
+        else:
+            self.categoria_filtro_combo.setCurrentIndex(0) # Volver a "Todas" si ya no existe
+
+        if self.current_product_dialog and self.current_product_dialog.isVisible():
+            print("DEBUG: Actualizando ComboBox en ProductDialog abierto...")
+            # Llamamos a la nueva función que crearemos en ProductDialog
+            self.current_product_dialog.actualizar_lista_categorias(self.categorias) 
+        # Forzar recarga visual de la tabla
+        self.filtrar_tabla_dinamico()
     
     def actualizar_tabla(self, productos_a_mostrar=None):
         """Muestra los productos en la tabla, asegurando que todas las columnas se llenen."""
@@ -743,9 +799,10 @@ class InventarioWindow(QMainWindow):
 
     def registrar_producto(self):
         """Abre el diálogo pasando las categorías."""
-        # ### <<< CAMBIO: Pasar lista de categorías al diálogo >>> ###
+       
         dialog = ProductDialog(self, proveedores=self.proveedores, categorias=self.categorias) 
-        
+        self.current_product_dialog = dialog
+
         if dialog.exec():
             nuevo_producto = dialog.get_product_data()
             if nuevo_producto is None: return # Si hubo error de validación en el diálogo
@@ -771,14 +828,15 @@ class InventarioWindow(QMainWindow):
                 cursor.execute(query, valores)
                 conexion.commit()
                 self.mostrar_alerta("Éxito", "Producto registrado correctamente.")
-                self.cargar_productos() # Recargar para ver el nuevo producto
-                self.verificar_y_cargar_alertas() # Actualizar alertas si aplica
+                self.cargar_productos() 
+                self.verificar_y_cargar_alertas() 
             except Exception as e:
                 self.mostrar_alerta("Error", f"Error al registrar: {e}", tipo="critical")
             finally:
                 if 'conexion' in locals() and conexion.is_connected():
                     cursor.close()
                     conexion.close()
+                self.current_product_dialog = None
 
     def editar_producto(self):
         selected_rows = self.table.selectedItems()
@@ -821,8 +879,9 @@ class InventarioWindow(QMainWindow):
             print("DEBUG: Producto encontrado pero sin ID.") # <<< DEBUG >>>
             return
             
-        # --- Abrir diálogo y actualizar (sin cambios desde aquí) ---
+  
         dialog = ProductDialog(self, producto_seleccionado, self.proveedores, self.categorias)
+        self.current_product_dialog = dialog
         if dialog.exec():
             producto_editado = dialog.get_product_data()
             if producto_editado is None: return
@@ -853,6 +912,7 @@ class InventarioWindow(QMainWindow):
                 if 'conexion' in locals() and conexion.is_connected():
                     cursor.close()
                     conexion.close()
+                self.current_product_dialog = None
     
     def eliminar_producto(self):
         selected_rows = self.table.selectedItems()
