@@ -128,7 +128,19 @@ class NuevaVentaDialog(QDialog):
                 gridline-color: #DEE2E6;
                 font-size: 12px;
                 background-color: white;
+                color: #000000;  /* Letra negra */
+                selection-background-color: #3498DB;  /* Color azul para selección */
+                selection-color: white;                                
             }
+            QTableWidget::item:selected {
+                background-color: #3498DB;  /* Azul cuando está seleccionado */
+                color: white;
+                font-weight: bold;
+            }
+            QTableWidget::item:hover {
+                background-color: #EBF5FB;  /* Azul claro al pasar el mouse */
+                color: #000000;
+            }                                    
             QHeaderView::section {
                 background-color: #0B6E4F;
                 color: white;
@@ -144,7 +156,19 @@ class NuevaVentaDialog(QDialog):
                 gridline-color: #DEE2E6;
                 font-size: 13px;
                 background-color: white;
+                color: #000000;  /* Letra negra */
+                selection-background-color: #2E86AB;  /* Color diferente para distinguir */
+                selection-color: white;                           
             }
+            QTableWidget::item:selected {
+                background-color: #2E86AB;  /* Azul oscuro cuando está seleccionado */
+                color: white;
+                font-weight: bold;
+            }
+            QTableWidget::item:hover {
+                background-color: #E8F4F8;  /* Azul muy claro al pasar el mouse */
+                color: #000000;
+            }                               
             QHeaderView::section {
                 background-color: #2E86AB;
                 color: white;
