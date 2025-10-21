@@ -378,41 +378,64 @@ class MainWindow(QMainWindow):
         if alert_type.startswith('inventory'):
             self.open_module("inventario", showAlerts=True)
  
-    # --- Module Navigation and Other Methods ---
     def open_module(self, module_name, showAlerts=False):
-        """Opens a module and hides the main window."""
-        self.current_module = None
-        # Close previous module if open
+        """Abre un módulo y oculta la ventana principal."""
+        
+        # Cerrar módulo anterior si existe
         if self.current_module:
              try:
                   self.current_module.close()
              except Exception as e:
-                  print(f"Error closing previous module: {e}")
-             self.current_module = None # Clear reference
+                  print(f"Error cerrando módulo anterior: {e}")
+        self.current_module = None 
         
-        # Create new module instance
         window_class = None
-        if module_name == "ventas": window_class = VentasWindow
-        elif module_name == "clientes": window_class = ClientesWindow
-        elif module_name == "inventario": window_class = InventarioWindow
-        elif module_name == "proveedores": window_class = ProveedoresWindow
         
+        # --- Lógica de selección de Módulo ---
+        if module_name == "ventas":
+            window_class = VentasWindow
+            
+        elif module_name == "clientes":
+            window_class = ClientesWindow
+            
+        elif module_name == "inventario":
+            window_class = InventarioWindow
+            
+        elif module_name == "proveedores":
+            window_class = ProveedoresWindow
+        
+        # --- Creación de Instancia y paso de parámetros ---
         if window_class:
              try:
-                  # Pass parent=self for proper window management
-                  if module_name == "inventario":
-                       self.current_module = InventarioWindow(parent=self, cargo=self.cargo, show_notifications_on_start=showAlerts)
-                  else:
-                       self.current_module = window_class(parent=self)
-                  
-                  if self.current_module:
+                # Módulos que SÍ necesitan el 'cargo'
+                if module_name in ["inventario", "proveedores"]:
+                    # Caso especial de inventario con showAlerts
+                    if module_name == "inventario":
+                        self.current_module = InventarioWindow(parent=self, cargo=self.cargo, show_notifications_on_start=showAlerts)
+                    else:
+                        # Clientes y Proveedores
+                        self.current_module = window_class(parent=self, cargo=self.cargo)
+                
+                # Módulos que (aún) NO necesitan 'cargo'
+                else: 
+                     self.current_module = window_class(parent=self)
+                
+                # Mostrar el módulo si se creó exitosamente
+                if self.current_module:
                     self.current_module.show()
                     self.hide()
+                    
+             except TypeError as te:
+                 # Error común si el __init__ del módulo no está actualizado
+                 print(f"Error de Tipo al abrir módulo '{module_name}': {te}")
+                 QMessageBox.critical(self, "Error de Módulo", f"Error al abrir '{module_name}':\nAsegúrese de que el módulo acepta los parámetros 'parent' y 'cargo'.\n\nDetalle: {te}")
+                 self.current_module = None 
+                 self.show() # Mostrar ventana principal de nuevo
              except Exception as e:
-                  print(f"Error opening module '{module_name}': {e}")
+                  print(f"Error abriendo módulo '{module_name}': {e}")
                   QMessageBox.critical(self, "Error", f"No se pudo abrir el módulo: {module_name}\n{e}")
-                  self.current_module = None # Ensure it's None if creation failed
-                  self.show() # Show main window again if module failed to open
+                  self.current_module = None 
+                  self.show() # Mostrar ventana principal de nuevo
 
     def register_user(self):
         # Prevent opening multiple registration windows
