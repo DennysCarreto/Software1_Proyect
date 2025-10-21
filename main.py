@@ -10,7 +10,6 @@ def main():
     app.setApplicationName("Farma PLUS")
     app.setOrganizationName("Farma PLUS")   
    
-    
     # Iniciar ventana de login  
     login = LoginWindow()
     login.show()

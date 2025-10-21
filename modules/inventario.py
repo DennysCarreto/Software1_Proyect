@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, QLi
                              QVBoxLayout, QHBoxLayout, QWidget, QTableWidget, QTableWidgetItem, 
                              QDialog, QDateEdit, QMessageBox, QHeaderView, QComboBox, QFrame,
                              QScrollArea, QSizePolicy)
-from PyQt6.QtCore import Qt, QDate, QPropertyAnimation, QEasingCurve, pyqtSignal
-from PyQt6.QtGui import QPalette, QColor, QIcon
+from PyQt6.QtCore import Qt, QDate, QPropertyAnimation, QEasingCurve, pyqtSignal, QRegularExpression
+from PyQt6.QtGui import QPalette, QColor, QIcon, QIntValidator, QDoubleValidator, QRegularExpressionValidator, QFont
 from datetime import datetime, timedelta
 from .categorias_dialog import CategoriasDialog
 from .noti2 import enviar_correo
@@ -30,6 +30,9 @@ class ProductDialog(QDialog):
         self.codigo_input = QLineEdit()
         self.nombre_label = QLabel("Nombre:")
         self.nombre_input = QLineEdit()
+        name_regex = QRegularExpression(r"^[^\d]+$") # Regex: Start (^) + one or more non-digits ([^\d]+) + End ($)
+        name_validator = QRegularExpressionValidator(name_regex, self)
+        self.nombre_input.setValidator(name_validator)
         
         # Reemplazar QLineEdit por QComboBox para Categoría
         self.categoria_label = QLabel("Categoría:")
@@ -38,20 +41,50 @@ class ProductDialog(QDialog):
             for cat in self.categorias:
                 self.categoria_combo.addItem(cat['nombre_categoria'], cat['id']) # Texto y ID
                 
-        self.stock_actual_label = QLabel("Stock Actual:")
+        self.stock_actual_label = QLabel("Stock Actual(Unidades Totales):")
         self.stock_actual_input = QLineEdit() # Añadir validación numérica luego
-        self.stock_minimo_label = QLabel("Stock Mínimo:")
+        int_validator_positive = QIntValidator(0, 999999, self) # Min 0, Max large number
+        self.stock_actual_input.setValidator(int_validator_positive)
+        self.layout.addSpacing(10) 
+        
+        cajas_layout = QHBoxLayout() # Layout for boxes and units fields
+        
+        self.cantidad_cajas_label = QLabel("Cantidad Cajas:")
+        self.cantidad_cajas_input = QLineEdit()
+        self.cantidad_cajas_input.setPlaceholderText("Ej: 5")
+        self.cantidad_cajas_input.setValidator(int_validator_positive) # Reuse validator
+        cajas_layout.addWidget(self.cantidad_cajas_label)
+        cajas_layout.addWidget(self.cantidad_cajas_input)
+
+        self.unidades_por_caja_label = QLabel("Unidades / Caja:")
+        self.unidades_por_caja_input = QLineEdit()
+        self.unidades_por_caja_input.setPlaceholderText("Ej: 100")
+        self.unidades_por_caja_input.setValidator(int_validator_positive) # Reuse validator
+        cajas_layout.addWidget(self.unidades_por_caja_label)
+        cajas_layout.addWidget(self.unidades_por_caja_input)
+
+        self.calcular_stock_btn = QPushButton("Calcular Unidades")
+        self.calcular_stock_btn.setStyleSheet("background-color: #3498DB; color: white; padding: 5px; border-radius: 5px;")
+        self.calcular_stock_btn.clicked.connect(self.calcular_stock_desde_cajas)    
+
+        self.stock_minimo_label = QLabel("Stock Mínimo(Unidades Totales):")
         self.stock_minimo_input = QLineEdit() # Añadir validación numérica luego
-        self.precio_venta_label = QLabel("Precio Venta:")
+        self.stock_minimo_input.setValidator(int_validator_positive)
+
+        double_validator_positive = QDoubleValidator(0.0, 999999.99, 2, self)
+
+        self.precio_venta_label = QLabel("Precio Venta(Unidades):")
         self.precio_venta_input = QLineEdit() # Añadir validación numérica luego
-        self.precio_compra_label = QLabel("Precio Compra:")
+        self.precio_venta_input.setValidator(double_validator_positive)
+        self.precio_compra_label = QLabel("Precio Compra(Unidades):")
         self.precio_compra_input = QLineEdit() # Añadir validación numérica luego
+        self.precio_compra_input.setValidator(double_validator_positive)
         self.proveedor_label = QLabel("Proveedor:")
         self.proveedor_combo = QComboBox()
         if self.proveedores:
             for prov in self.proveedores:
                 self.proveedor_combo.addItem(f"{prov['nombre']} ({prov['marca']})", prov['id'])
-        self.vencimiento_label = QLabel("Vencimiento:")
+        self.vencimiento_label = QLabel("Fecha deVencimiento:")
         self.vencimiento_input = QDateEdit()
         self.vencimiento_input.setCalendarPopup(True)
         self.vencimiento_input.setDate(QDate.currentDate())
@@ -78,6 +111,12 @@ class ProductDialog(QDialog):
         self.layout.addWidget(self.categoria_combo) # Añadir el QComboBox
         self.layout.addWidget(self.stock_actual_label)
         self.layout.addWidget(self.stock_actual_input)
+
+        self.layout.addLayout(cajas_layout) 
+        self.layout.addWidget(self.calcular_stock_btn)
+        self.layout.addSpacing(10)
+
+
         self.layout.addWidget(self.stock_minimo_label)
         self.layout.addWidget(self.stock_minimo_input)
         self.layout.addWidget(self.precio_venta_label)
@@ -93,6 +132,69 @@ class ProductDialog(QDialog):
         
         if product_data:
             self.populate_form(product_data)
+
+    def calcular_stock_desde_cajas(self):
+        """Calculates total units from boxes and units/box, updates Stock Actual field."""
+        try:
+            cajas_str = self.cantidad_cajas_input.text().strip()
+            unidades_str = self.unidades_por_caja_input.text().strip()
+
+            # Check if fields are empty
+            if not cajas_str or not unidades_str:
+                QMessageBox.warning(self, "Campos Vacíos", "Ingrese la cantidad de cajas y las unidades por caja.")
+                return
+
+            cantidad_cajas = int(cajas_str)
+            unidades_por_caja = int(unidades_str)
+            
+            total_unidades = cantidad_cajas * unidades_por_caja
+            
+            # Update the Stock Actual field
+            self.stock_actual_input.setText(str(total_unidades))
+            
+            # Optional: Clear the calculation fields after successful calculation
+            self.cantidad_cajas_input.clear()
+            self.unidades_por_caja_input.clear()
+
+        except ValueError:
+            QMessageBox.warning(self, "Error de Formato", "Asegúrese de que 'Cantidad Cajas' y 'Unidades / Caja' sean números enteros válidos.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Ocurrió un error al calcular: {e}")
+
+
+    def accept(self):
+        """Overrides the default accept behavior to add validation."""
+        if not self.nombre_input.text().strip():
+            QMessageBox.warning(self, "Campo Vacío", "El nombre del producto es obligatorio.")
+            self.nombre_input.setFocus() # Focus the problematic field
+            return # Stop the accept process
+        if not self.nombre_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El nombre del producto no puede contener números.")
+             self.nombre_input.setFocus()
+             return
+             
+        if not self.stock_actual_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El Stock Actual debe ser un número entero positivo.")
+             self.stock_actual_input.setFocus()
+             return
+             
+        if not self.stock_minimo_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El Stock Mínimo debe ser un número entero positivo.")
+             self.stock_minimo_input.setFocus()
+             return
+
+        if not self.precio_venta_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El Precio de Venta debe ser un número decimal positivo (ej: 12.50).")
+             self.precio_venta_input.setFocus()
+             return
+             
+        if not self.precio_compra_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El Precio de Compra debe ser un número decimal positivo (ej: 10.00).")
+             self.precio_compra_input.setFocus()
+             return
+        super().accept()
+
+
 
     def populate_form(self, product_data):
         self.product_id = product_data.get('id')
@@ -212,9 +314,10 @@ class NotificationCard(QFrame):
 
 
 class InventarioWindow(QMainWindow):
-    def __init__(self, parent=None, show_notifications_on_start=False):
+    def __init__(self, parent=None, cargo=None, show_notifications_on_start=False):
         super().__init__(parent)
         self.parent_window = parent
+        self.cargo = cargo
         self.setWindowTitle("Módulo de Inventario")
         self.setMinimumSize(1200, 800)
         self.current_product_dialog = None
@@ -367,14 +470,12 @@ class InventarioWindow(QMainWindow):
         self.editar_button = QPushButton("✏️ Editar Seleccionado")
         self.eliminar_button = QPushButton("❌ Eliminar Seleccionado")
         self.limpiar_button = QPushButton("🗑️ Limpiar Tabla")
-
+        self.gestionar_categorias_btn = QPushButton("📁 Gestionar Categorías")
         # Aplica estilos
         self.registrar_button.setStyleSheet(self.style_primary_button)
         self.editar_button.setStyleSheet(self.style_header_button)
         self.eliminar_button.setStyleSheet(self.style_danger_button)
         self.limpiar_button.setStyleSheet(self.style_header_button)
-
-        self.gestionar_categorias_btn = QPushButton("📁 Gestionar Categorías")
         self.gestionar_categorias_btn.setStyleSheet(self.style_header_button)
 
         # Añade botones al action_layout
@@ -403,6 +504,14 @@ class InventarioWindow(QMainWindow):
         self.codigo_input.textChanged.connect(self.filtrar_tabla_dinamico)
         self.categoria_filtro_combo.currentIndexChanged.connect(self.filtrar_tabla_dinamico)
         self.proveedor_combo.currentIndexChanged.connect(self.filtrar_tabla_dinamico)
+        if self.cargo == 'Empleado':
+            print("DEBUG: Aplicando restricciones para Empleado en Inventario.") # Mensaje de depuración
+            # Ocultar botones no permitidos para Empleado
+            self.eliminar_button.hide() 
+            self.gestionar_categorias_btn.hide()
+            # Opcional: Deshabilitar en lugar de ocultar
+            # self.eliminar_button.setEnabled(False)
+            # self.gestionar_categorias_btn.setEnabled(False)
 
     def setup_table(self):
         self.table = QTableWidget()
@@ -692,37 +801,61 @@ class InventarioWindow(QMainWindow):
     def mostrar_alerta(self, titulo, mensaje, tipo="information"):
         msgBox = QMessageBox(self)
         msgBox.setWindowTitle(titulo)
-        msgBox.setText(mensaje)
         
-        # Aplicar un estilo básico para que se vea mejor
+        # ### <<< INICIO: ESTILOS MEJORADOS Y MÁS ESPECÍFICOS >>> ###
+        
+        # Determinar el color del icono y un borde sutil basado en el tipo
+        if tipo == "critical":
+            msgBox.setIcon(QMessageBox.Icon.Critical)
+            border_color = self.colores['peligro']
+        elif tipo == "warning":
+            msgBox.setIcon(QMessageBox.Icon.Warning)
+            border_color = self.colores['advertencia'] # Asumiendo que tienes 'advertencia' en tus colores
+        else: # Information
+            msgBox.setIcon(QMessageBox.Icon.Information)
+            border_color = self.colores['acento']
+        msgBox.setText(f"<b>{titulo}</b>")
+        msgBox.setInformativeText(mensaje) 
+            
+        # Aplicar estilos
         msgBox.setStyleSheet(f"""
             QMessageBox {{
-                background-color: {self.colores['fondo']};
+                background-color: {self.colores['fondo']}; /* Fondo principal de la ventana */
+                border: 1px solid {self.colores['borde']};
+                border-left: 5px solid {border_color}; /* Borde izquierdo con color semántico */
+                border-radius: 5px;
             }}
-            QLabel {{
+            /* Etiqueta principal (Título) */
+            QMessageBox QLabel#qt_msgbox_label {{ /* Selector específico */
                 color: {self.colores['texto_principal']};
+                font-size: 16px; 
+                font-weight: bold;
+                padding-bottom: 10px; 
+            }}
+             /* Etiqueta secundaria (Mensaje) */
+            QMessageBox QLabel#qt_msgbox_informativelabel {{ /* Selector específico */
+                color: {self.colores['texto_secundario']};
                 font-size: 14px;
+                padding-left: 20px; /* Indentación para claridad */
+                min-width: 300px; /* Asegurar espacio para el texto */
             }}
             QPushButton {{
                 background-color: {self.colores['acento']};
                 color: white;
+                border: none;
                 border-radius: 5px;
-                padding: 8px 15px;
+                padding: 8px 20px; /* Más padding horizontal */
                 font-weight: bold;
-                min-width: 80px;
+                min-width: 90px; /* Ancho mínimo */
+                margin-top: 10px; /* Espacio arriba del botón */
             }}
             QPushButton:hover {{
                 background-color: {self.colores['cabecera']};
             }}
         """)
-
-        if tipo == "critical":
-            msgBox.setIcon(QMessageBox.Icon.Critical)
-        elif tipo == "warning":
-            msgBox.setIcon(QMessageBox.Icon.Warning)
-        else: # Information o cualquier otro
-            msgBox.setIcon(QMessageBox.Icon.Information)
-            
+  
+        msgBox.addButton(QMessageBox.StandardButton.Ok) 
+        
         msgBox.exec()
     
     def abrir_gestion_categorias(self):
