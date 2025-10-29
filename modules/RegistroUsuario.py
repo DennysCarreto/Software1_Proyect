@@ -6,16 +6,47 @@ import hashlib
 import re
 import mysql.connector
 from conexion import ConexionBD
+
 class VentanaRegistro(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Registro de Usuario")
-        self.setGeometry(200, 200, 500, 650)
+        # Obtener dimensiones de la pantalla y ajustar
+        from PyQt6.QtWidgets import QApplication
+        screen = QApplication.primaryScreen().geometry()
+        window_height = min(800, screen.height() - 100)  # Máximo 800 o altura de pantalla menos margen
+        self.setGeometry(200, 30, 520, window_height)
         self.setStyleSheet("background-color: #1A202C;")
         
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        layout_vertical = QVBoxLayout(central_widget)
+        
+        # Crear scroll area para contenido largo
+        from PyQt6.QtWidgets import QScrollArea
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("""
+            QScrollArea {
+                border: none;
+                background-color: #1A202C;
+            }
+            QScrollBar:vertical {
+                background-color: #2D3A48;
+                width: 12px;
+                border-radius: 6px;
+            }
+            QScrollBar::handle:vertical {
+                background-color: #3A9D5A;
+                border-radius: 6px;
+                min-height: 20px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background-color: #278E43;
+            }
+        """)
+        
+        scroll_content = QWidget()
+        layout_vertical = QVBoxLayout(scroll_content)
         layout_vertical.setSpacing(10)
         layout_vertical.setContentsMargins(30, 30, 30, 30)
         
@@ -90,6 +121,15 @@ class VentanaRegistro(QMainWindow):
         layout_vertical.addWidget(self.etiquetaA)
         layout_vertical.addWidget(self.setApellido)
         
+        # Campo de correo electrónico
+        self.etiquetaCorreo = QLabel("Correo Electrónico:")
+        self.etiquetaCorreo.setStyleSheet(label_style)
+        self.setCorreo = QLineEdit(self)
+        self.setCorreo.setPlaceholderText("ejemplo@correo.com")
+        self.setCorreo.setStyleSheet(input_style)
+        layout_vertical.addWidget(self.etiquetaCorreo)
+        layout_vertical.addWidget(self.setCorreo)
+        
         # Teléfono con extensión
         self.etiquetaT = QLabel("Teléfono:")
         self.etiquetaT.setStyleSheet(label_style)
@@ -115,7 +155,6 @@ class VentanaRegistro(QMainWindow):
         self.setTel = QLineEdit(self)
         self.setTel.setPlaceholderText("Ej: 12345678")
         self.setTel.setStyleSheet(input_style)
-        # Validador para solo números
         self.setTel.setMaxLength(15)
         
         tel_layout.addWidget(self.extension_combo)
@@ -208,19 +247,35 @@ class VentanaRegistro(QMainWindow):
         boton_regresar.setCursor(Qt.CursorShape.PointingHandCursor)
         layout_vertical.addWidget(boton_regresar)
         
+        # Configurar scroll area
+        scroll.setWidget(scroll_content)
+        main_layout = QVBoxLayout(central_widget)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
+        
         boton_regresar.clicked.connect(self.cerrar_ventana)
         self.botonRegistrarme.clicked.connect(self.registrar)
 
     def toggle_password_visibility(self):
         """Cambia el modo de visualización de la contraseña y el icono"""
         if self.setContraseña.echoMode() == QLineEdit.EchoMode.Password:
-            # Si está oculto, mostrarlo
             self.setContraseña.setEchoMode(QLineEdit.EchoMode.Normal)
             self.toggle_password_action.setIcon(self.eye_icon_open)
         else:
-            # Si se está mostrando, ocultarlo
             self.setContraseña.setEchoMode(QLineEdit.EchoMode.Password)
             self.toggle_password_action.setIcon(self.eye_icon_closed)
+
+    def validar_correo(self, correo):
+        """Valida que el correo tenga un formato válido"""
+        if not correo:
+            return False, "El correo electrónico no puede estar vacío"
+        
+        # Patrón regex para validar correo electrónico
+        patron = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+        if not re.match(patron, correo):
+            return False, "El formato del correo electrónico no es válido"
+        
+        return True, ""
 
     def validar_telefono(self, telefono):
         """Valida que el teléfono contenga solo números"""
@@ -259,6 +314,9 @@ class VentanaRegistro(QMainWindow):
         if not self.setApellido.text().strip():
             return False, "El campo Apellido es obligatorio"
         
+        if not self.setCorreo.text().strip():
+            return False, "El campo Correo Electrónico es obligatorio"
+        
         if not self.setTel.text().strip():
             return False, "El campo Teléfono es obligatorio"
         
@@ -282,11 +340,18 @@ class VentanaRegistro(QMainWindow):
         
         nombre = self.setNombre.text().strip()
         apellido = self.setApellido.text().strip()
+        correo = self.setCorreo.text().strip()
         telefono = self.setTel.text().strip()
         nombreUsuario = self.setNombreUsuario.text().strip()
         contraseña = self.setContraseña.text()
         cargo = self.set_tipo_Usuario.currentText()
-        extension = self.extension_combo.currentText().split()[0]  # Obtiene solo +502
+        extension = self.extension_combo.currentText().split()[0]
+        
+        # Validar correo
+        valido_correo, mensaje_correo = self.validar_correo(correo)
+        if not valido_correo:
+            QMessageBox.warning(self, "Error en Correo", mensaje_correo)
+            return
         
         # Validar teléfono
         valido_tel, mensaje_tel = self.validar_telefono(telefono)
@@ -307,7 +372,7 @@ class VentanaRegistro(QMainWindow):
         telefono_completo = f"{extension} {telefono}"
         
         # Agregar usuario
-        self.agregar_Usuario(nombre, apellido, telefono_completo, nombreUsuario, contraseñaE, cargo)
+        self.agregar_Usuario(nombre, apellido, correo, telefono_completo, nombreUsuario, contraseñaE, cargo)
 
     def encriptarContraseña(self, contrasena):
         clave = 3
@@ -322,7 +387,7 @@ class VentanaRegistro(QMainWindow):
         
         return contrasena_encriptada
 
-    def agregar_Usuario(self, nombre, apellido, telefono, nombreUsuario, contrasenia, cargo):
+    def agregar_Usuario(self, nombre, apellido, correo, telefono, nombreUsuario, contrasenia, cargo):
         try:
             conexion = ConexionBD.obtener_conexion()
             cursor = conexion.cursor()
@@ -334,11 +399,18 @@ class VentanaRegistro(QMainWindow):
                                    "El nombre de usuario ya está registrado. Por favor elige otro.")
                 return
 
+            # Verificar si el correo ya existe
+            cursor.execute("SELECT correo FROM usuario WHERE correo = %s", (correo,))
+            if cursor.fetchone():
+                QMessageBox.warning(self, "Correo Existente", 
+                                   "El correo electrónico ya está registrado. Por favor usa otro.")
+                return
+
             consulta = """
-            INSERT INTO usuario (nombre, apellido, telefono, usuario, contraseña, cargo, activo) 
-            VALUES (%s, %s, %s, %s, %s, %s, 1)
+            INSERT INTO usuario (nombre, apellido, correo, telefono, usuario, contraseña, cargo, activo) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 1)
             """
-            datos = (nombre, apellido, telefono, nombreUsuario, contrasenia, cargo)
+            datos = (nombre, apellido, correo, telefono, nombreUsuario, contrasenia, cargo)
             cursor.execute(consulta, datos)
 
             conexion.commit()
@@ -348,6 +420,7 @@ class VentanaRegistro(QMainWindow):
             # Limpiar campos
             self.setNombre.clear()
             self.setApellido.clear()
+            self.setCorreo.clear()
             self.setTel.clear()
             self.setNombreUsuario.clear()
             self.setContraseña.clear()
