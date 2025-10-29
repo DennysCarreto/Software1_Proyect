@@ -15,7 +15,7 @@ class EmailService:
     # SMTP_SERVER = "smtp-mail.outlook.com"
     # SMTP_PORT = 587
     
-    EMAIL_FROM = "denisaguilon@gmail.com"  # Cambia esto
+    EMAIL_FROM = "denisaguilon@gmail.com"  # Cambiar esto al correo de la empresa/due;o
     EMAIL_PASSWORD = "lwotxkbifwgohvwt"  # Usa contraseña de aplicación de Gmail
     
     @staticmethod
