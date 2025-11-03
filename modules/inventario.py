@@ -506,12 +506,10 @@ class InventarioWindow(QMainWindow):
         self.proveedor_combo.currentIndexChanged.connect(self.filtrar_tabla_dinamico)
         if self.cargo == 'Empleado':
             print("DEBUG: Aplicando restricciones para Empleado en Inventario.") # Mensaje de depuración
-            # Ocultar botones no permitidos para Empleado
+          
             self.eliminar_button.hide() 
             self.gestionar_categorias_btn.hide()
-            # Opcional: Deshabilitar en lugar de ocultar
-            # self.eliminar_button.setEnabled(False)
-            # self.gestionar_categorias_btn.setEnabled(False)
+
 
     def setup_table(self):
         self.table = QTableWidget()
@@ -692,7 +690,7 @@ class InventarioWindow(QMainWindow):
         try:
             conexion = ConexionBD.obtener_conexion()
             cursor = conexion.cursor(dictionary=True)
-            # ### <<< CAMBIO: Se reemplaza 'apellido' por 'marca' en el CONCAT >>> ###
+           
             query = """
             SELECT 
                 p.*, 
@@ -801,10 +799,7 @@ class InventarioWindow(QMainWindow):
     def mostrar_alerta(self, titulo, mensaje, tipo="information"):
         msgBox = QMessageBox(self)
         msgBox.setWindowTitle(titulo)
-        
-        # ### <<< INICIO: ESTILOS MEJORADOS Y MÁS ESPECÍFICOS >>> ###
-        
-        # Determinar el color del icono y un borde sutil basado en el tipo
+      
         if tipo == "critical":
             msgBox.setIcon(QMessageBox.Icon.Critical)
             border_color = self.colores['peligro']

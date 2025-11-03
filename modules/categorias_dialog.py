@@ -2,7 +2,7 @@
 import sys
 from PyQt6.QtWidgets import (QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
                              QLineEdit, QTableWidget, QMessageBox, QTableWidgetItem,
-                             QHeaderView, QFrame, QFormLayout, QApplication, QTextEdit) # QTextEdit para descripción
+                             QHeaderView, QFrame, QFormLayout, QApplication, QTextEdit, QWidget)
 from PyQt6.QtGui import QPalette, QColor, QFont
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -11,7 +11,6 @@ from conexion import ConexionBD
 import mysql.connector
 
 class CategoriasDialog(QDialog):
-    # Señal para notificar a la ventana de inventario que las categorías han cambiado
     categories_updated = pyqtSignal()
 
     def __init__(self, parent=None):
@@ -19,18 +18,37 @@ class CategoriasDialog(QDialog):
         self.setWindowTitle("Gestionar Categorías de Productos")
         self.setMinimumSize(800, 600)
 
-        # Usar la misma paleta de colores que InventarioWindow
-        self.colores = parent.colores if parent and hasattr(parent, 'colores') else {
-            "fondo": "#F8F9FA", "cabecera": "#0B6E4F",
-            "texto_principal": "#212529", "acento": "#3A9D5A",
-            "borde": "#DEE2E6", "peligro": "#E53E3E"
+        # ### <<< INICIO: CORRECCIÓN DE DISEÑO Y TEMA >>> ###
+        
+        # 1. Definir una paleta OSCURA local y completa. No heredar del padre.
+        self.colores = {
+            "fondo": "#1A202C",           # Fondo principal oscuro
+            "fondo_secundario": "#2D3748", # Fondo para inputs y tabla
+            "texto_principal": "#E2E8F0", # Texto claro
+            "texto_secundario": "#A0AEC0",
+            "cabecera": "#0B6E4F",        # Verde cabecera tabla
+            "acento": "#3A9D5A",          # Verde botones
+            "borde": "#4A5568",           # Gris oscuro para bordes
+            "peligro": "#E53E3E",         # Rojo
+            "blanco": "#FFFFFF",
+            "negro": "#000000"
         }
         
-        self._create_stylesheets()
+        # 2. Aplicar el fondo oscuro al DIÁLOGO y el color de texto por defecto
+        self.setStyleSheet(f"""
+            QDialog {{ 
+                background-color: {self.colores['fondo']}; 
+            }}
+            QLabel {{
+                font-size: 14px; 
+                color: {self.colores['texto_principal']}; 
+                background-color: transparent;
+            }}
+        """)
+        
+        self._create_stylesheets() # Generar todos los estilos detallados
 
-        palette = self.palette()
-        palette.setColor(QPalette.ColorRole.Window, QColor(self.colores["fondo"]))
-        self.setPalette(palette)
+        # 3. Eliminar el setPalette, ya no es necesario
         
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(15, 15, 15, 15)
@@ -41,50 +59,89 @@ class CategoriasDialog(QDialog):
         self._setup_table()
 
         self.cargar_categorias() # Cargar datos al iniciar
+        # ### <<< FIN: CORRECCIÓN DE DISEÑO Y TEMA >>> ###
 
     def _create_stylesheets(self):
         """Define los estilos de la ventana."""
+        default_font_family = "Segoe UI, Roboto, Helvetica, Arial, sans-serif"
+
+        # ### CAMBIO: Usar fondo_secundario y texto_principal ###
         self.style_input_field = f"""
             QLineEdit, QTextEdit {{ 
-                border: 1px solid {self.colores['borde']}; border-radius: 5px;
-                padding: 8px; font-size: 14px; background-color: white; 
-                color: {self.colores['texto_principal']};
+                border: 1px solid {self.colores['borde']}; 
+                border-radius: 5px;
+                padding: 8px; 
+                font-size: 14px; 
+                background-color: {self.colores['fondo_secundario']}; /* Fondo oscuro-gris */
+                color: {self.colores['texto_principal']}; /* Texto CLARO */
+                font-family: {default_font_family};
             }}
             QTextEdit {{ min-height: 60px; }} 
         """
-        # (Copiar los estilos de botones y tabla desde InventarioWindow._create_stylesheets)
+        self.style_label = f"font-size: 14px; color: {self.colores['texto_principal']}; font-family: {default_font_family}; background-color: transparent;"
+        
         self.style_primary_button = f"""
             QPushButton {{ background-color: {self.colores['acento']}; color: white; border: none; 
-                           border-radius: 5px; padding: 10px; font-weight: bold; }} 
+                           border-radius: 5px; padding: 10px; font-weight: bold; 
+                           font-family: {default_font_family}; }} 
             QPushButton:hover {{ background-color: {self.colores['cabecera']}; }}"""
+        
         self.style_danger_button = f"""
             QPushButton {{ background-color: {self.colores['peligro']}; color: white; border: none; 
-                           border-radius: 5px; padding: 10px; font-weight: bold; }} 
+                           border-radius: 5px; padding: 10px; font-weight: bold; 
+                           font-family: {default_font_family}; }} 
             QPushButton:hover {{ background-color: #C53030; }}"""
+        
         self.style_header_button = f"""
-            QPushButton {{ background-color: #FFFFFF; color: {self.colores['texto_principal']}; border: none; 
-                           border-radius: 5px; padding: 8px 12px; font-weight: bold; }} 
-            QPushButton:hover {{ background-color: #E2E8F0; }}"""
+            QPushButton {{ background-color: {self.colores['fondo_secundario']}; color: {self.colores['texto_principal']}; border: none; 
+                           border-radius: 5px; padding: 8px 12px; font-weight: bold; 
+                           font-family: {default_font_family}; }} 
+            QPushButton:hover {{ background-color: {self.colores['borde']}; }}"""
+            
+        # ### CAMBIO: Usar fondo_secundario y texto_principal ###
         self.style_table = f"""
-            QTableWidget {{ border: 1px solid {self.colores['borde']}; gridline-color: {self.colores['borde']}; font-size: 13px; }}
-            QHeaderView::section {{ background-color: {self.colores['cabecera']}; color: white; padding: 8px;
-                                   border: 1px solid {self.colores['cabecera']}; font-weight: bold; }}
-            QTableWidget::item:selected {{ background-color: {self.colores['acento']}; color: white; }}"""
+            QTableWidget {{ 
+                border: 1px solid {self.colores['borde']}; 
+                gridline-color: {self.colores['borde']}; 
+                font-size: 13px; 
+                font-family: {default_font_family}; 
+                background-color: {self.colores['fondo_secundario']}; /* Fondo oscuro-gris */
+            }}
+            QHeaderView::section {{ 
+                background-color: {self.colores['cabecera']}; 
+                color: white; 
+                padding: 8px;
+                border: 1px solid {self.colores['cabecera']}; 
+                font-weight: bold; 
+                font-family: {default_font_family}; 
+            }}
+            QTableWidget::item {{
+                color: {self.colores['texto_principal']}; /* Texto CLARO */
+                padding: 5px;
+            }}
+            QTableWidget::item:selected {{ 
+                background-color: {self.colores['acento']}; 
+                color: white; 
+            }}"""
 
 
     def _setup_form_panel(self):
         form_frame = QFrame()
+        form_frame.setStyleSheet("background-color: transparent; border: none;") # Transparente
         form_layout = QVBoxLayout(form_frame)
+        form_layout.setContentsMargins(0, 0, 0, 0)
+        form_layout.setSpacing(10)
         
         data_entry_layout = QFormLayout()
         data_entry_layout.setSpacing(10)
         
         self.nombre_input = QLineEdit()
-        self.descripcion_input = QTextEdit() # Usar QTextEdit para descripciones más largas
+        self.descripcion_input = QTextEdit()
         
         self.nombre_input.setStyleSheet(self.style_input_field)
         self.descripcion_input.setStyleSheet(self.style_input_field)
 
+        # Las etiquetas usarán el estilo global del QDialog
         data_entry_layout.addRow(QLabel("Nombre Categoría:"), self.nombre_input)
         data_entry_layout.addRow(QLabel("Descripción:"), self.descripcion_input)
         
@@ -111,33 +168,39 @@ class CategoriasDialog(QDialog):
 
         self.main_layout.addWidget(form_frame)
         
-        # Conexiones
         self.agregar_btn.clicked.connect(self.agregar_categoria)
         self.actualizar_btn.clicked.connect(self.actualizar_categoria)
         self.eliminar_btn.clicked.connect(self.desactivar_categoria)
         self.limpiar_btn.clicked.connect(self.limpiar_campos)
 
     def _setup_search_bar(self):
-        search_layout = QHBoxLayout()
+        search_frame = QFrame()
+        search_frame.setStyleSheet("background-color: transparent; border: none;") # Transparente
+        search_layout = QHBoxLayout(search_frame)
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText("🔍 Buscar por nombre...")
         self.search_input.setStyleSheet(self.style_input_field)
         self.search_input.textChanged.connect(self.filtrar_tabla)
+        
         search_layout.addWidget(self.search_input)
-        self.main_layout.addLayout(search_layout)
+        self.main_layout.addWidget(search_frame)
 
     def _setup_table(self):
         self.table = QTableWidget()
-        self.table.setColumnCount(3) # ID, Nombre, Descripción
+        self.table.setColumnCount(3)
         self.table.setHorizontalHeaderLabels(["ID", "Nombre Categoría", "Descripción"])
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch) 
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch) 
-        header.setStretchLastSection(False)
-        self.table.setColumnWidth(1, 200) 
+        
+        # Ajuste de tamaño de columnas
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive) # Nombre
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch) # Descripción (ocupa el resto)
+        self.table.setColumnWidth(1, 200) # Ancho inicial para Nombre
+
         self.table.setStyleSheet(self.style_table)
         self.table.clicked.connect(self.cargar_categoria_en_formulario)
         self.main_layout.addWidget(self.table)
@@ -156,7 +219,7 @@ class CategoriasDialog(QDialog):
         descripcion = self.table.item(selected_row, 2).text()
         
         self.nombre_input.setText(nombre)
-        self.descripcion_input.setPlainText(descripcion) # Usar setPlainText para QTextEdit
+        self.descripcion_input.setPlainText(descripcion)
 
     def cargar_categorias(self):
         self.table.setRowCount(0)
@@ -170,7 +233,7 @@ class CategoriasDialog(QDialog):
             for i, cat in enumerate(categorias):
                 self.table.setItem(i, 0, QTableWidgetItem(str(cat['id'])))
                 self.table.setItem(i, 1, QTableWidgetItem(cat['nombre_categoria']))
-                self.table.setItem(i, 2, QTableWidgetItem(cat.get('descripcion', ''))) # Manejar si descripción es NULL
+                self.table.setItem(i, 2, QTableWidgetItem(cat.get('descripcion', '')))
             
             self.table.setColumnHidden(0, True)
         except Exception as err:
@@ -194,7 +257,7 @@ class CategoriasDialog(QDialog):
 
     def agregar_categoria(self):
         nombre = self.nombre_input.text().strip()
-        descripcion = self.descripcion_input.toPlainText().strip() # Usar toPlainText para QTextEdit
+        descripcion = self.descripcion_input.toPlainText().strip()
 
         if not nombre:
             QMessageBox.warning(self, "Campo Vacío", "El nombre de la categoría es obligatorio.")
@@ -209,13 +272,12 @@ class CategoriasDialog(QDialog):
             QMessageBox.information(self, "Éxito", "Categoría agregada.")
             self.limpiar_campos()
             self.cargar_categorias()
-            self.categories_updated.emit() # Notificar que hubo un cambio
+            self.categories_updated.emit()
         except mysql.connector.Error as err:
-             # Manejar error de duplicado de forma específica
-            if err.errno == 1062: # Código de error para entrada duplicada
-                 QMessageBox.warning(self, "Error", f"La categoría '{nombre}' ya existe.")
+            if err.errno == 1062:
+                QMessageBox.warning(self, "Error", f"La categoría '{nombre}' ya existe.")
             else:
-                 QMessageBox.critical(self, "Error", f"Error al agregar: {err}")
+                QMessageBox.critical(self, "Error", f"Error al agregar: {err}")
         finally:
             if 'conexion' in locals() and conexion.is_connected():
                 cursor.close()
@@ -244,12 +306,12 @@ class CategoriasDialog(QDialog):
             QMessageBox.information(self, "Éxito", "Categoría actualizada.")
             self.limpiar_campos()
             self.cargar_categorias()
-            self.categories_updated.emit() # Notificar que hubo un cambio
+            self.categories_updated.emit()
         except mysql.connector.Error as err:
             if err.errno == 1062:
-                 QMessageBox.warning(self, "Error", f"Ya existe otra categoría con el nombre '{nombre}'.")
+                QMessageBox.warning(self, "Error", f"Ya existe otra categoría con el nombre '{nombre}'.")
             else:
-                 QMessageBox.critical(self, "Error", f"Error al actualizar: {err}")
+                QMessageBox.critical(self, "Error", f"Error al actualizar: {err}")
         finally:
             if 'conexion' in locals() and conexion.is_connected():
                 cursor.close()
@@ -265,20 +327,19 @@ class CategoriasDialog(QDialog):
         nombre_cat = self.table.item(selected_row, 1).text()
         
         confirm = QMessageBox.question(self, "Confirmar", f"¿Desactivar '{nombre_cat}'?",
-                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+                                             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         
         if confirm == QMessageBox.StandardButton.Yes:
             try:
                 conexion = ConexionBD.obtener_conexion()
                 cursor = conexion.cursor()
-                # Borrado lógico usando 'estado'
                 query = "UPDATE categoria SET estado = 0 WHERE id = %s"
                 cursor.execute(query, (cat_id,))
                 conexion.commit()
                 QMessageBox.information(self, "Éxito", "Categoría desactivada.")
                 self.limpiar_campos()
                 self.cargar_categorias()
-                self.categories_updated.emit() # Notificar que hubo un cambio
+                self.categories_updated.emit()
             except Exception as err:
                 QMessageBox.critical(self, "Error", f"Error al desactivar: {err}")
             finally:
@@ -286,15 +347,20 @@ class CategoriasDialog(QDialog):
                     cursor.close()
                     conexion.close()
 
-# Código para probar el diálogo independientemente (opcional)
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    # Necesitamos una clase 'parent' falsa que tenga 'colores' para probar
     class FakeParent(QWidget):
         def __init__(self):
             super().__init__()
-            self.colores = {"fondo": "#F8F9FA", "cabecera": "#0B6E4F", "texto_principal": "#212529", 
-                           "acento": "#3A9D5A", "borde": "#DEE2E6", "peligro": "#E53E3E"}
+            self.colores = {
+                "fondo": "#1A202C", "fondo_secundario": "#2D3748",
+                "texto_principal": "#E2E8F0", "texto_secundario": "#A0AEC0",
+                "cabecera": "#0B6E4F", "acento": "#3A9D5A", 
+                "borde": "#4A5568", "peligro": "#E53E3E", 
+                "advertencia": "#ED8936", "info": "#3182CE",
+                "blanco": "#FFFFFF", "negro": "#000000"
+                # "fondo_claro" ya no es necesaria
+            }
     
     dialog = CategoriasDialog(parent=FakeParent())
     dialog.show()
