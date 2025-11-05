@@ -696,6 +696,9 @@ class VentasWindow(QMainWindow):
             return
         
         venta_id = self.ventas_table.item(selected[0].row(), 0).text()
+        fecha = self.ventas_table.item(selected[0].row(), 1).text()
+        cliente = self.ventas_table.item(selected[0].row(), 2).text()
+        total_venta = self.ventas_table.item(selected[0].row(), 3).text()
         
         try:
             conexion = ConexionBD.obtener_conexion()
@@ -703,34 +706,71 @@ class VentasWindow(QMainWindow):
             
             # Obtener detalles de la venta
             cursor.execute("""
-                SELECT p.nombre, dv.cantidad, dv.precio_unitario, dv.subtotal
+                SELECT p.nombre, p.codigo, dv.cantidad, dv.precio_unitario, dv.subtotal
                 FROM detalle_venta dv
                 JOIN producto p ON dv.producto_id = p.id
                 WHERE dv.ventas_id = %s
+                ORDER BY p.nombre
             """, (venta_id,))
             
             detalles = cursor.fetchall()
+            
+            cursor.close()
+            conexion.close()
             
             if not detalles:
                 QMessageBox.information(self, "Detalles", "No se encontraron detalles para esta venta.")
                 return
             
-            # Mostrar detalles en un mensaje
-            mensaje = f"Detalles de Venta #{venta_id}\n\n"
-            total = 0
-            for detalle in detalles:
-                mensaje += f"{detalle['nombre']} - {detalle['cantidad']} x Q{detalle['precio_unitario']:.2f} = Q{detalle['subtotal']:.2f}\n"
-                total += detalle['subtotal']
+            # Crear diálogo personalizado para mostrar detalles
+            dialog = QDialog(self)
+            dialog.setWindowTitle(f"Detalles de Venta #{venta_id}")
+            dialog.resize(700, 500)
             
-            mensaje += f"\nTotal: Q{total:.2f}"
+            layout = QVBoxLayout()
             
-            QMessageBox.information(self, "Detalles de Venta", mensaje)
+            # Información general
+            info_frame = QFrame()
+            info_frame.setStyleSheet("background-color: white; color: #000000;  /* Letra negra */; border-radius: 5px; padding: 10px;")
+            info_layout = QVBoxLayout(info_frame)
             
-            cursor.close()
-            conexion.close()
+            info_layout.addWidget(QLabel(f"<b>Venta #:</b> {venta_id}"))
+            info_layout.addWidget(QLabel(f"<b>Fecha:</b> {fecha}"))
+            info_layout.addWidget(QLabel(f"<b>Cliente:</b> {cliente}"))
+            info_layout.addWidget(QLabel(f"<b>Total:</b> {total_venta}"))
+            
+            layout.addWidget(info_frame)
+            
+            # Tabla de productos
+            layout.addWidget(QLabel("<b>Productos:</b>"))
+            tabla = QTableWidget()
+            tabla.setColumnCount(5)
+            tabla.setHorizontalHeaderLabels(["Código", "Producto", "Cantidad", "P. Unitario", "Subtotal"])
+            tabla.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+            tabla.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+            tabla.setRowCount(len(detalles))
+            
+            for row, detalle in enumerate(detalles):
+                tabla.setItem(row, 0, QTableWidgetItem(detalle.get('codigo', 'N/A')))
+                tabla.setItem(row, 1, QTableWidgetItem(detalle['nombre']))
+                tabla.setItem(row, 2, QTableWidgetItem(str(detalle['cantidad'])))
+                tabla.setItem(row, 3, QTableWidgetItem(f"Q{float(detalle['precio_unitario']):.2f}"))
+                tabla.setItem(row, 4, QTableWidgetItem(f"Q{float(detalle['subtotal']):.2f}"))
+            
+            tabla.setStyleSheet(self.style_table)
+            layout.addWidget(tabla)
+            
+            # Botón cerrar
+            close_btn = QPushButton("Cerrar")
+            close_btn.setStyleSheet(self.style_header_button)
+            close_btn.clicked.connect(dialog.close)
+            layout.addWidget(close_btn)
+            
+            dialog.setLayout(layout)
+            dialog.exec()
             
         except mysql.connector.Error as error:
-            QMessageBox.critical(self, "Error", f"Error al cargar detalles: {error}")
+            QMessageBox.critical(self, "Error", f"Error al cargar detalles:\n{error}")
 
     def go_back_to_main(self):
         if self.parent_window:
