@@ -37,10 +37,10 @@ class NuevaVentaDialog(QDialog):
         
         layout.addLayout(search_layout)
         
-        # Tabla de resultados de búsqueda
+        # Tabla de resultados de búsqueda - se añadio la columna categoria
         self.search_results_table = QTableWidget()
-        self.search_results_table.setColumnCount(5)
-        self.search_results_table.setHorizontalHeaderLabels(["ID", "Código", "Producto", "Stock", "Precio"])
+        self.search_results_table.setColumnCount(6)
+        self.search_results_table.setHorizontalHeaderLabels(["ID", "Código", "Producto", "categoria", "Stock", "Precio"])
         self.search_results_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.search_results_table.setColumnHidden(0, True)
         self.search_results_table.setMaximumHeight(150)
@@ -205,8 +205,10 @@ class NuevaVentaDialog(QDialog):
             self.search_results_table.setItem(row, 0, QTableWidgetItem(str(producto['id'])))
             self.search_results_table.setItem(row, 1, QTableWidgetItem(producto.get('codigo', 'N/A')))
             self.search_results_table.setItem(row, 2, QTableWidgetItem(producto['nombre']))
-            self.search_results_table.setItem(row, 3, QTableWidgetItem(str(producto['stockActual'])))
-            self.search_results_table.setItem(row, 4, QTableWidgetItem(f"Q{float(producto['precioVenta']):.2f}"))
+            # mostrar categoria en comna 3
+            self.search_results_table.setItem(row, 3, QTableWidgetItem(producto.get('categoria_nombre', 'Sin Categoría')))
+            self.search_results_table.setItem(row, 4, QTableWidgetItem(str(producto['stockActual'])))
+            self.search_results_table.setItem(row, 5, QTableWidgetItem(f"Q{float(producto['precioVenta']):.2f}"))
         
         # Seleccionar automáticamente la primera fila si hay resultados
         if productos:
@@ -217,8 +219,8 @@ class NuevaVentaDialog(QDialog):
         if row < self.search_results_table.rowCount():
             producto_id = int(self.search_results_table.item(row, 0).text())
             producto_nombre = self.search_results_table.item(row, 2).text()
-            producto_stock = int(self.search_results_table.item(row, 3).text())
-            producto_precio = float(self.search_results_table.item(row, 4).text().replace('Q', ''))
+            producto_stock = int(self.search_results_table.item(row, 4).text())
+            producto_precio = float(self.search_results_table.item(row, 5).text().replace('Q', ''))
             
             self.producto_actual_seleccionado = {
                 'id': producto_id,
@@ -619,12 +621,19 @@ class VentasWindow(QMainWindow):
             cursor.execute("SELECT id, nombre, apellido FROM cliente WHERE activo = 1")
             clientes = cursor.fetchall()
             
-            # Obtener productos con stock
+            # Obtener productos con stock - ahora incluyendo categoría 
             cursor.execute("""
-                SELECT id, codigo, nombre, precioVenta, stockActual 
-                FROM producto 
-                WHERE stockActual > 0
-                ORDER BY nombre
+                SELECT 
+                    p.id, 
+                    p.codigo, 
+                    p.nombre, 
+                    p.precioVenta, 
+                    p.stockActual,
+                    cat.nombre_categoria as categoria_nombre
+                FROM producto p
+                LEFT JOIN categoria cat ON p.categoria_id = cat.id
+                WHERE p.stockActual > 0
+                ORDER BY p.nombre
             """)
             productos = cursor.fetchall()
             
