@@ -213,7 +213,10 @@ class ClientesWindow(QMainWindow):
                 self.nombre_input.setText(cliente.get('nombre', ''))
                 self.apellido_input.setText(cliente.get('apellido', ''))
                 self.telefono_input.setText(cliente.get('telefono', ''))
-                self.nit_input.setText(cliente.get('nit', ''))
+                nit_valor = cliente.get('nit') 
+                nit_texto = str(nit_valor) if nit_valor is not None else '' 
+                
+                self.nit_input.setText(nit_texto)
                 self.direccion_input.setText(cliente.get('direccion', ''))
         except mysql.connector.Error as err:
             QMessageBox.critical(self, "Error", f"No se pudo cargar la información completa del cliente: {err}")
