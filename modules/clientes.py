@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QWidget,QGridLayout,QLineEdit,QTableWidget,QMessageBox,QTableWidgetItem, QHeaderView, QFrame, QFormLayout
-from PyQt6.QtGui import QPixmap, QPalette, QColor
-from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPixmap, QPalette, QColor, QRegularExpressionValidator
+from PyQt6.QtCore import Qt, QRegularExpression
 import mysql.connector
 
 from conexion import ConexionBD
@@ -35,17 +35,13 @@ class ClientesWindow(QMainWindow):
 
         self._setup_header_bar()
         self._setup_form_panel()
-        self._setup_search_bar() # <-- NUEVO PANEL DE BÚSQUEDA
+        self._setup_search_bar() 
         self._setup_table()
 
-        # ### <<< FIN: SISTEMA DE DISEÑO PROFESIONAL >>> ###
-
-        self.mostrar_clientes() # Cargar datos iniciales
+        self.mostrar_clientes() 
 
     def _create_stylesheets(self):
         """Método central para definir todos los estilos de la ventana."""
-        # (Este método es idéntico al del módulo de Proveedores, puedes copiarlo de allí)
-        # Por claridad, lo incluyo aquí de nuevo.
         self.style_header_label = f"font-size: 22px; font-weight: bold; color: white; background: transparent;"
         self.style_header_button = f"""
             QPushButton {{ background-color: #FFFFFF; color: {self.colores['texto_principal']};
@@ -107,13 +103,30 @@ class ClientesWindow(QMainWindow):
         self.nit_input = QLineEdit()
         self.direccion_input = QLineEdit()
         
+
+        name_regex = QRegularExpression(r"^[^\d\s_]+(?: [^\d\s_]+)*$")
+        name_validator = QRegularExpressionValidator(name_regex, self)
+        self.nombre_input.setValidator(name_validator)
+        self.apellido_input.setValidator(name_validator)
+
+        # Validador para Teléfono (exactamente 8 números)
+        phone_regex = QRegularExpression(r"^\d{8}$") 
+        phone_validator = QRegularExpressionValidator(phone_regex, self)
+        self.telefono_input.setValidator(phone_validator)
+    
+        nit_regex = QRegularExpression(r"^[0-9KkCf-]{1,9}$") 
+        nit_validator = QRegularExpressionValidator(nit_regex, self)
+        self.nit_input.setValidator(nit_validator)
+        self.nit_input.setMaxLength(9)  
+       
+
         for field in [self.nombre_input, self.apellido_input, self.telefono_input, self.nit_input, self.direccion_input]:
             field.setStyleSheet(self.style_input_field)
 
         data_entry_layout.addRow(QLabel("Nombre:"), self.nombre_input)
         data_entry_layout.addRow(QLabel("Apellido:"), self.apellido_input)
-        data_entry_layout.addRow(QLabel("Teléfono:"), self.telefono_input)
-        data_entry_layout.addRow(QLabel("NIT:"), self.nit_input)
+        data_entry_layout.addRow(QLabel("Teléfono (8 dígitos):"), self.telefono_input)
+        data_entry_layout.addRow(QLabel("NIT (máx 9):"), self.nit_input)
         data_entry_layout.addRow(QLabel("Dirección:"), self.direccion_input)
         
         form_layout.addLayout(data_entry_layout)
@@ -166,15 +179,23 @@ class ClientesWindow(QMainWindow):
 
     def _setup_table(self):
         self.table = QTableWidget()
-        self.table.setColumnCount(5)
-        self.table.setHorizontalHeaderLabels(["ID", "Nombre", "Apellido", "Teléfono", "NIT"])
+        # ### <<< CAMBIO: Añadir columna Dirección >>> ###
+        self.table.setColumnCount(6)
+        self.table.setHorizontalHeaderLabels(["ID", "Nombre", "Apellido", "Teléfono", "NIT", "Dirección"])
+        
         self.table.verticalHeader().setVisible(False)
         self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(5, QHeaderView.ResizeMode.Interactive) 
+        self.table.setColumnWidth(5, 300) 
+        
         self.table.setStyleSheet(self.style_table)
         self.table.clicked.connect(self.cargar_cliente_en_formulario)
         self.main_layout.addWidget(self.table)
+        self.table.setColumnHidden(0, True) 
     
     def filtrar_tabla(self):
         """Filtra las filas de la tabla basado en el texto de búsqueda."""
@@ -235,6 +256,15 @@ class ClientesWindow(QMainWindow):
         if not nombre or not apellido:
             QMessageBox.warning(self, "Campos Vacíos", "Nombre y Apellido son obligatorios.")
             return
+        if not self.nombre_input.hasAcceptableInput() or not self.apellido_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "Nombre y Apellido no pueden contener números.")
+             return
+        if telefono and not self.telefono_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El Teléfono debe contener exactamente 8 dígitos numéricos.")
+             return
+        if nit and not self.nit_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El NIT no es válido (máx 9 caracteres, solo números, K, C/F, -).")
+             return
 
         try:
             conexion = ConexionBD.obtener_conexion()
@@ -242,11 +272,11 @@ class ClientesWindow(QMainWindow):
             query = "INSERT INTO cliente (nombre, apellido, telefono, nit, direccion, activo) VALUES (%s, %s, %s, %s, %s, 1)"
             cursor.execute(query, (nombre, apellido, telefono, nit, direccion))
             conexion.commit()
-            QMessageBox.information(self, "Éxito", "Cliente agregado correctamente.")
+            QMessageBox.information(self, "Éxito", "Cliente agregado.")
             self.limpiar_campos()
             self.mostrar_clientes()
         except mysql.connector.Error as err:
-            QMessageBox.critical(self, "Error de Base de Datos", f"Error al agregar cliente: {err}")
+            QMessageBox.critical(self, "Error", f"Error al agregar cliente: {err}")
         finally:
             if 'conexion' in locals() and conexion.is_connected():
                 cursor.close()
@@ -257,20 +287,24 @@ class ClientesWindow(QMainWindow):
         try:
             conexion = ConexionBD.obtener_conexion()
             cursor = conexion.cursor(dictionary=True)
-            cursor.execute("SELECT id, nombre, apellido, telefono, nit FROM cliente WHERE activo = 1")
+            cursor.execute("SELECT id, nombre, apellido, telefono, nit, direccion FROM cliente WHERE activo = 1")
             clientes = cursor.fetchall()
             
             self.table.setRowCount(len(clientes))
             for i, cliente in enumerate(clientes):
                 self.table.setItem(i, 0, QTableWidgetItem(str(cliente['id'])))
-                self.table.setItem(i, 1, QTableWidgetItem(cliente['nombre']))
-                self.table.setItem(i, 2, QTableWidgetItem(cliente['apellido']))
-                self.table.setItem(i, 3, QTableWidgetItem(cliente['telefono']))
-                self.table.setItem(i, 4, QTableWidgetItem(cliente['nit']))
+                self.table.setItem(i, 1, QTableWidgetItem(cliente.get('nombre', '')))
+                self.table.setItem(i, 2, QTableWidgetItem(cliente.get('apellido', '')))
+                self.table.setItem(i, 3, QTableWidgetItem(cliente.get('telefono', '')))
+                
+                nit_val = cliente.get('nit')
+                nit_str = str(nit_val) if nit_val is not None else ''
+                self.table.setItem(i, 4, QTableWidgetItem(nit_str))
+                self.table.setItem(i, 5, QTableWidgetItem(cliente.get('direccion', '')))
             
             self.table.setColumnHidden(0, True)
         except mysql.connector.Error as err:
-            QMessageBox.critical(self, "Error de Base de Datos", f"Error al mostrar clientes: {err}")
+            QMessageBox.critical(self, "Error", f"Error al mostrar clientes: {err}")
         finally:
             if 'conexion' in locals() and conexion.is_connected():
                 cursor.close()
@@ -279,7 +313,7 @@ class ClientesWindow(QMainWindow):
     def actualizar_cliente(self):
         selected_row = self.table.currentRow()
         if selected_row < 0:
-            QMessageBox.warning(self, "Sin Selección", "Por favor, seleccione un cliente de la tabla para actualizar.")
+            QMessageBox.warning(self, "Sin Selección", "Seleccione un cliente para actualizar.")
             return
         
         cliente_id = self.table.item(selected_row, 0).text()
@@ -293,17 +327,27 @@ class ClientesWindow(QMainWindow):
             QMessageBox.warning(self, "Campos Vacíos", "Nombre y Apellido son obligatorios.")
             return
 
+        if not self.nombre_input.hasAcceptableInput() or not self.apellido_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "Nombre y Apellido no pueden contener números.")
+             return
+        if telefono and not self.telefono_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El Teléfono debe contener exactamente 8 dígitos numéricos.")
+             return
+        if nit and not self.nit_input.hasAcceptableInput():
+             QMessageBox.warning(self, "Formato Incorrecto", "El NIT no es válido.")
+             return
+
         try:
             conexion = ConexionBD.obtener_conexion()
             cursor = conexion.cursor()
             query = "UPDATE cliente SET nombre=%s, apellido=%s, telefono=%s, nit=%s, direccion=%s WHERE id=%s"
             cursor.execute(query, (nombre, apellido, telefono, nit, direccion, cliente_id))
             conexion.commit()
-            QMessageBox.information(self, "Éxito", "Cliente actualizado correctamente.")
+            QMessageBox.information(self, "Éxito", "Cliente actualizado.")
             self.limpiar_campos()
             self.mostrar_clientes()
         except mysql.connector.Error as err:
-            QMessageBox.critical(self, "Error de Base de Datos", f"Error al actualizar cliente: {err}")
+            QMessageBox.critical(self, "Error", f"Error al actualizar cliente: {err}")
         finally:
             if 'conexion' in locals() and conexion.is_connected():
                 cursor.close()
