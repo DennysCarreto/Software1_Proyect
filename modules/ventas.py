@@ -2,7 +2,7 @@ import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
                             QLabel, QPushButton, QTableWidget, QTableWidgetItem, QLineEdit, 
                             QMessageBox, QDateEdit, QHeaderView, QDialog, QDialogButtonBox, QComboBox, QFrame,
-                            QSpinBox)
+                            QSpinBox, QInputDialog)
 from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QPalette, QColor, QFont, QIntValidator
 from conexion import ConexionBD
@@ -497,6 +497,10 @@ class VentasWindow(QMainWindow):
         self.main_layout.addWidget(header_frame)
 
     def setup_control_panel(self):
+        """
+        MEJORA 1: Panel de control mejorado con búsqueda avanzada
+        Se agregaron múltiples mejoras en la interfaz de búsqueda
+        """
         control_frame = QFrame()
         control_frame.setStyleSheet(f"margin: 0 10px;")
         control_layout = QVBoxLayout(control_frame)
@@ -504,12 +508,30 @@ class VentasWindow(QMainWindow):
         
         # Filtros de búsqueda
         search_layout = QHBoxLayout()
+        
+        # MEJORA: Selector de fecha con calendario popup
         self.fecha_inicio = QDateEdit(QDate.currentDate().addDays(-30))
+        self.fecha_inicio.setCalendarPopup(True)  # Permite seleccionar fecha con calendario visual
+        self.fecha_inicio.setDisplayFormat("dd/MM/yyyy")  # Formato de fecha más familiar (día/mes/año)
+        
         self.fecha_fin = QDateEdit(QDate.currentDate())
+        self.fecha_fin.setCalendarPopup(True)  # Permite seleccionar fecha con calendario visual
+        self.fecha_fin.setDisplayFormat("dd/MM/yyyy")  # Formato de fecha más familiar
+        
+        # MEJORA: Campo de búsqueda con funcionalidades adicionales
         self.cliente_input = QLineEdit()
-        self.cliente_input.setPlaceholderText("Nombre o Apellido del Cliente")
-        self.buscar_btn = QPushButton("Buscar Ventas")
-        self.buscar_btn.setStyleSheet(self.style_header_button)
+        self.cliente_input.setPlaceholderText("🔍 Buscar por nombre o apellido del cliente...")  # Placeholder más descriptivo con emoji
+        self.cliente_input.setClearButtonEnabled(True)  # Agrega botón X para limpiar el campo rápidamente
+        self.cliente_input.returnPressed.connect(self.buscar_ventas)  # Permite buscar presionando Enter
+        
+        # MEJORA: Botón de búsqueda con estilo primario (más visible)
+        self.buscar_btn = QPushButton("🔎 Buscar")
+        self.buscar_btn.setStyleSheet(self.style_primary_button)  # Ahora usa el estilo primario verde
+        
+        # MEJORA 2: Nuevo botón para limpiar filtros rápidamente
+        self.limpiar_btn = QPushButton("🗑️ Limpiar Filtros")
+        self.limpiar_btn.setStyleSheet(self.style_header_button)
+        self.limpiar_btn.clicked.connect(self.limpiar_filtros)  # Conecta al nuevo método limpiar_filtros
 
         for widget in [self.fecha_inicio, self.fecha_fin, self.cliente_input]:
             widget.setStyleSheet(self.style_input_field)
@@ -520,7 +542,14 @@ class VentasWindow(QMainWindow):
         search_layout.addWidget(self.fecha_fin)
         search_layout.addWidget(self.cliente_input, 1)
         search_layout.addWidget(self.buscar_btn)
+        search_layout.addWidget(self.limpiar_btn)  # Agregamos el nuevo botón
         control_layout.addLayout(search_layout)
+        
+        # MEJORA 3: Etiqueta de resultados para mostrar información de búsqueda
+        # Esta etiqueta mostrará: cantidad de ventas, filtros aplicados y total general
+        self.resultado_label = QLabel("")
+        self.resultado_label.setStyleSheet("color: #6C757D; font-size: 13px; font-style: italic;")
+        control_layout.addWidget(self.resultado_label)
         
         # Botones de acción
         action_layout = QHBoxLayout()
@@ -552,6 +581,10 @@ class VentasWindow(QMainWindow):
         self.main_layout.addWidget(self.ventas_table)
 
     def cargar_ventas(self, filtros=None):
+        """
+        MEJORA 4: Método mejorado para cargar ventas con información detallada
+        Ahora muestra estadísticas de resultados y filtros aplicados
+        """
         QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
         self.ventas_table.setRowCount(0)
         try:
@@ -570,16 +603,24 @@ class VentasWindow(QMainWindow):
             """
             
             params = []
+            filtros_aplicados = []  # Lista para almacenar los filtros activos
+            
             if filtros:
+                # MEJORA: Filtro de fecha mejorado usando DATE() para comparar solo fechas sin hora
                 if filtros.get('fecha_inicio'):
-                    query += " AND v.fechaVenta >= %s"
+                    query += " AND DATE(v.fechaVenta) >= %s"
                     params.append(filtros['fecha_inicio'])
+                    filtros_aplicados.append(f"Desde: {filtros['fecha_inicio']}")
+                    
                 if filtros.get('fecha_fin'):
-                    query += " AND v.fechaVenta <= %s"
+                    query += " AND DATE(v.fechaVenta) <= %s"
                     params.append(filtros['fecha_fin'])
+                    filtros_aplicados.append(f"Hasta: {filtros['fecha_fin']}")
+                    
                 if filtros.get('cliente'):
                     query += " AND (c.nombre LIKE %s OR c.apellido LIKE %s)"
                     params.extend([f"%{filtros['cliente']}%", f"%{filtros['cliente']}%"])
+                    filtros_aplicados.append(f"Cliente: '{filtros['cliente']}'")
             
             query += " ORDER BY v.fechaVenta DESC, v.id DESC"
             
@@ -587,30 +628,83 @@ class VentasWindow(QMainWindow):
             ventas = cursor.fetchall()
             
             self.ventas_table.setRowCount(len(ventas))
+            total_general = 0  # Variable para calcular el total de todas las ventas mostradas
+            
             for row, venta in enumerate(ventas):
                 self.ventas_table.setItem(row, 0, QTableWidgetItem(str(venta['id'])))
-                self.ventas_table.setItem(row, 1, QTableWidgetItem(venta['fecha'].strftime('%Y-%m-%d %H:%M')))
+                # MEJORA: Formato de fecha mejorado (dd/MM/yyyy HH:mm) más legible
+                self.ventas_table.setItem(row, 1, QTableWidgetItem(venta['fecha'].strftime('%d/%m/%Y %H:%M')))
                 self.ventas_table.setItem(row, 2, QTableWidgetItem(venta['cliente_nombre']))
                 self.ventas_table.setItem(row, 3, QTableWidgetItem(f"Q{float(venta['total']):.2f}"))
                 self.ventas_table.setItem(row, 4, QTableWidgetItem(venta['vendedor']))
                 self.ventas_table.setItem(row, 5, QTableWidgetItem(venta['estado']))
+                total_general += float(venta['total'])  # Suma el total de cada venta
+            
+            # MEJORA 5: Actualizar etiqueta de resultados con información detallada
+            if ventas:
+                # Construir mensaje informativo con estadísticas
+                resultado_texto = f"📊 Se encontraron {len(ventas)} venta(s)"
+                
+                # Si hay filtros aplicados, mostrarlos
+                if filtros_aplicados:
+                    resultado_texto += f" | Filtros: {' | '.join(filtros_aplicados)}"
+                
+                # Mostrar el total general de las ventas encontradas
+                resultado_texto += f" | Total General: Q{total_general:.2f}"
+                self.resultado_label.setText(resultado_texto)
+            else:
+                # Mensajes diferentes según si hay filtros o no
+                if filtros:
+                    self.resultado_label.setText("⚠️ No se encontraron ventas con los filtros aplicados")
+                else:
+                    self.resultado_label.setText("ℹ️ No hay ventas registradas en el sistema")
             
             cursor.close()
             conexion.close()
             
         except mysql.connector.Error as error:
             QMessageBox.critical(self, "Error de Base de Datos", f"Error al cargar ventas:\n{error}")
+            self.resultado_label.setText("❌ Error al cargar ventas")
         finally:
             QApplication.restoreOverrideCursor()
     
     def buscar_ventas(self):
+        """
+        MEJORA 6: Método de búsqueda optimizado
+        Construye los filtros solo con valores válidos
+        """
         filtros = {
             'fecha_inicio': self.fecha_inicio.date().toString("yyyy-MM-dd"),
             'fecha_fin': self.fecha_fin.date().toString("yyyy-MM-dd")
         }
-        if self.cliente_input.text().strip():
-            filtros['cliente'] = self.cliente_input.text().strip()
+        
+        # Solo agregar filtro de cliente si hay texto ingresado
+        cliente_texto = self.cliente_input.text().strip()
+        if cliente_texto:
+            filtros['cliente'] = cliente_texto
+        
+        # Ejecutar la búsqueda
         self.cargar_ventas(filtros)
+    
+    def limpiar_filtros(self):
+        """
+        MEJORA 7: Nuevo método para resetear todos los filtros
+        Restaura los valores por defecto y recarga todas las ventas
+        """
+        # Resetear fecha de inicio a 30 días atrás
+        self.fecha_inicio.setDate(QDate.currentDate().addDays(-30))
+        
+        # Resetear fecha final a hoy
+        self.fecha_fin.setDate(QDate.currentDate())
+        
+        # Limpiar campo de búsqueda de cliente
+        self.cliente_input.clear()
+        
+        # Limpiar etiqueta de resultados
+        self.resultado_label.setText("")
+        
+        # Recargar todas las ventas sin filtros
+        self.cargar_ventas()
     
     def nueva_venta(self):
         try:
@@ -785,6 +879,7 @@ class VentasWindow(QMainWindow):
         if self.parent_window:
             self.parent_window.show()
         self.close()
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
