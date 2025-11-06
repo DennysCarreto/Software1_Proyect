@@ -7,6 +7,10 @@ from PyQt6.QtCore import Qt, QDate
 from PyQt6.QtGui import QPalette, QColor, QFont, QIntValidator
 from conexion import ConexionBD
 import mysql.connector
+from PyQt6.QtWidgets import QFileDialog
+from reporte_ventas_pdf import generar_reporte_ventas_pdf
+from datetime import datetime
+import os
 
 class NuevaVentaDialog(QDialog):
     def __init__(self, clientes, productos, parent=None):
@@ -498,40 +502,35 @@ class VentasWindow(QMainWindow):
 
     def setup_control_panel(self):
         """
-        MEJORA 1: Panel de control mejorado con búsqueda avanzada
-        Se agregaron múltiples mejoras en la interfaz de búsqueda
+        Panel de control mejorado con búsqueda avanzada y generación de reportes
         """
         control_frame = QFrame()
         control_frame.setStyleSheet(f"margin: 0 10px;")
         control_layout = QVBoxLayout(control_frame)
         control_layout.setSpacing(15)
-        
-        # Filtros de búsqueda
+
+        # Filtros de búsqueda (código existente)
         search_layout = QHBoxLayout()
-        
-        # MEJORA: Selector de fecha con calendario popup
+
         self.fecha_inicio = QDateEdit(QDate.currentDate().addDays(-30))
-        self.fecha_inicio.setCalendarPopup(True)  # Permite seleccionar fecha con calendario visual
-        self.fecha_inicio.setDisplayFormat("dd/MM/yyyy")  # Formato de fecha más familiar (día/mes/año)
-        
+        self.fecha_inicio.setCalendarPopup(True)
+        self.fecha_inicio.setDisplayFormat("dd/MM/yyyy")
+
         self.fecha_fin = QDateEdit(QDate.currentDate())
-        self.fecha_fin.setCalendarPopup(True)  # Permite seleccionar fecha con calendario visual
-        self.fecha_fin.setDisplayFormat("dd/MM/yyyy")  # Formato de fecha más familiar
-        
-        # MEJORA: Campo de búsqueda con funcionalidades adicionales
+        self.fecha_fin.setCalendarPopup(True)
+        self.fecha_fin.setDisplayFormat("dd/MM/yyyy")
+
         self.cliente_input = QLineEdit()
-        self.cliente_input.setPlaceholderText("🔍 Buscar por nombre o apellido del cliente...")  # Placeholder más descriptivo con emoji
-        self.cliente_input.setClearButtonEnabled(True)  # Agrega botón X para limpiar el campo rápidamente
-        self.cliente_input.returnPressed.connect(self.buscar_ventas)  # Permite buscar presionando Enter
-        
-        # MEJORA: Botón de búsqueda con estilo primario (más visible)
+        self.cliente_input.setPlaceholderText("🔍 Buscar por nombre o apellido del cliente...")
+        self.cliente_input.setClearButtonEnabled(True)
+        self.cliente_input.returnPressed.connect(self.buscar_ventas)
+
         self.buscar_btn = QPushButton("🔎 Buscar")
-        self.buscar_btn.setStyleSheet(self.style_primary_button)  # Ahora usa el estilo primario verde
-        
-        # MEJORA 2: Nuevo botón para limpiar filtros rápidamente
+        self.buscar_btn.setStyleSheet(self.style_primary_button)
+
         self.limpiar_btn = QPushButton("🗑️ Limpiar Filtros")
         self.limpiar_btn.setStyleSheet(self.style_header_button)
-        self.limpiar_btn.clicked.connect(self.limpiar_filtros)  # Conecta al nuevo método limpiar_filtros
+        self.limpiar_btn.clicked.connect(self.limpiar_filtros)
 
         for widget in [self.fecha_inicio, self.fecha_fin, self.cliente_input]:
             widget.setStyleSheet(self.style_input_field)
@@ -542,29 +541,49 @@ class VentasWindow(QMainWindow):
         search_layout.addWidget(self.fecha_fin)
         search_layout.addWidget(self.cliente_input, 1)
         search_layout.addWidget(self.buscar_btn)
-        search_layout.addWidget(self.limpiar_btn)  # Agregamos el nuevo botón
+        search_layout.addWidget(self.limpiar_btn)
         control_layout.addLayout(search_layout)
-        
-        # MEJORA 3: Etiqueta de resultados para mostrar información de búsqueda
-        # Esta etiqueta mostrará: cantidad de ventas, filtros aplicados y total general
+
+        # Etiqueta de resultados
         self.resultado_label = QLabel("")
         self.resultado_label.setStyleSheet("color: #6C757D; font-size: 13px; font-style: italic;")
         control_layout.addWidget(self.resultado_label)
-        
+
         # Botones de acción
         action_layout = QHBoxLayout()
+
         self.nueva_venta_btn = QPushButton("➕ Registrar Nueva Venta")
         self.nueva_venta_btn.setStyleSheet(self.style_primary_button)
+
         self.ver_detalles_btn = QPushButton("📋 Ver Detalles de Venta")
         self.ver_detalles_btn.setStyleSheet(self.style_header_button)
+
+        # *** NUEVO BOTÓN PARA GENERAR REPORTE PDF ***
+        self.generar_reporte_btn = QPushButton("📄 Generar Reporte PDF")
+        self.generar_reporte_btn.setStyleSheet("""
+            QPushButton { 
+                background-color: #E74C3C; 
+                color: white;
+                border: none; 
+                border-radius: 5px; 
+                padding: 10px; 
+                font-weight: bold;
+            } 
+            QPushButton:hover { 
+                background-color: #C0392B; 
+            }
+        """)
+        self.generar_reporte_btn.clicked.connect(self.generar_reporte_pdf)
+
         action_layout.addWidget(self.nueva_venta_btn)
         action_layout.addWidget(self.ver_detalles_btn)
+        action_layout.addWidget(self.generar_reporte_btn)  # Agregar el nuevo botón
         action_layout.addStretch()
         control_layout.addLayout(action_layout)
-        
+
         self.main_layout.addWidget(control_frame)
-        
-        # Conexiones
+
+        # Conexiones (mantener las existentes y agregar la nueva)
         self.buscar_btn.clicked.connect(self.buscar_ventas)
         self.nueva_venta_btn.clicked.connect(self.nueva_venta)
         self.ver_detalles_btn.clicked.connect(self.ver_detalles_venta)
@@ -879,6 +898,88 @@ class VentasWindow(QMainWindow):
         if self.parent_window:
             self.parent_window.show()
         self.close()
+
+    def generar_reporte_pdf(self):
+        """
+        Genera un reporte PDF de las ventas con los filtros actuales
+        """
+        try:
+            # Construir filtros actuales
+            filtros = {}
+
+            # Solo agregar filtros si hay valores
+            fecha_inicio = self.fecha_inicio.date().toString("yyyy-MM-dd")
+            fecha_fin = self.fecha_fin.date().toString("yyyy-MM-dd")
+
+            filtros['fecha_inicio'] = fecha_inicio
+            filtros['fecha_fin'] = fecha_fin
+
+            cliente_texto = self.cliente_input.text().strip()
+            if cliente_texto:
+                filtros['cliente'] = cliente_texto
+
+            # Diálogo para seleccionar ubicación del archivo
+            opciones = QFileDialog.Option.DontUseNativeDialog
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nombre_sugerido = f"reporte_ventas_{timestamp}.pdf"
+
+            archivo, _ = QFileDialog.getSaveFileName(
+                self,
+                "Guardar Reporte de Ventas",
+                nombre_sugerido,
+                "Archivos PDF (*.pdf);;Todos los archivos (*)",
+                options=opciones
+            )
+
+            if not archivo:
+                # Usuario canceló
+                return
+
+            # Asegurar que tenga extensión .pdf
+            if not archivo.lower().endswith('.pdf'):
+                archivo += '.pdf'
+
+            # Mostrar cursor de espera
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+
+            # Generar el reporte
+            archivo_generado = generar_reporte_ventas_pdf(filtros, archivo)
+
+            # Restaurar cursor
+            QApplication.restoreOverrideCursor()
+
+            # Preguntar si desea abrir el archivo
+            respuesta = QMessageBox.question(
+                self,
+                "Reporte Generado",
+                f"El reporte se ha generado exitosamente en:\n{archivo_generado}\n\n¿Desea abrir el archivo?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+
+            if respuesta == QMessageBox.StandardButton.Yes:
+                # Abrir el PDF con el visor predeterminado del sistema
+                if os.name == 'nt':  # Windows
+                    os.startfile(archivo_generado)
+                elif os.name == 'posix':  # macOS y Linux
+                    import subprocess
+                    subprocess.call(['xdg-open', archivo_generado])
+
+        except ValueError as ve:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(
+                self,
+                "Sin Datos",
+                str(ve)
+            )
+
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(
+                self,
+                "Error al Generar Reporte",
+                f"Ocurrió un error al generar el reporte PDF:\n\n{str(e)}"
+            )
 
 
 if __name__ == "__main__":
