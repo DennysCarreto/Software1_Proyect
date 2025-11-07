@@ -10,6 +10,7 @@ import mysql.connector
 from conexion import ConexionBD
 
 
+
 class ReporteVentasPDF:
     """
     Clase para generar reportes de ventas en PDF con diseño profesional
@@ -85,7 +86,7 @@ class ReporteVentasPDF:
         canvas.setFillColor(colors.HexColor('#0B6E4F'))
         canvas.drawString(50, letter[1] - 35, datos_empresa.get('nombre', 'XXXXXXXXXXXXXXXXXXXX'))
 
-        canvas.restoreOverrideCursor()
+        #canvas.restoreOverrideCursor()
 
     def generar_reporte(self, filtros=None, nombre_archivo=None):
         """

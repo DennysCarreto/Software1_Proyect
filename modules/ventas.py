@@ -907,7 +907,6 @@ class VentasWindow(QMainWindow):
             # Construir filtros actuales
             filtros = {}
 
-            # Solo agregar filtros si hay valores
             fecha_inicio = self.fecha_inicio.date().toString("yyyy-MM-dd")
             fecha_fin = self.fecha_fin.date().toString("yyyy-MM-dd")
 
@@ -932,45 +931,50 @@ class VentasWindow(QMainWindow):
             )
 
             if not archivo:
-                # Usuario canceló
                 return
 
-            # Asegurar que tenga extensión .pdf
             if not archivo.lower().endswith('.pdf'):
                 archivo += '.pdf'
 
-            # Mostrar cursor de espera
+            # *** MOVER EL CURSOR DE ESPERA AQUÍ ***
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
-            # Generar el reporte
-            archivo_generado = generar_reporte_ventas_pdf(filtros, archivo)
+            try:
+                # Generar el reporte
+                archivo_generado = generar_reporte_ventas_pdf(filtros, archivo)
 
-            # Restaurar cursor
-            QApplication.restoreOverrideCursor()
+                # *** RESTAURAR CURSOR DENTRO DEL TRY ***
+                QApplication.restoreOverrideCursor()
 
-            # Preguntar si desea abrir el archivo
-            respuesta = QMessageBox.question(
-                self,
-                "Reporte Generado",
-                f"El reporte se ha generado exitosamente en:\n{archivo_generado}\n\n¿Desea abrir el archivo?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes
-            )
+                # Preguntar si desea abrir el archivo
+                respuesta = QMessageBox.question(
+                    self,
+                    "Reporte Generado",
+                    f"El reporte se ha generado exitosamente en:\n{archivo_generado}\n\n¿Desea abrir el archivo?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
 
-            if respuesta == QMessageBox.StandardButton.Yes:
-                # Abrir el PDF con el visor predeterminado del sistema
-                if os.name == 'nt':  # Windows
-                    os.startfile(archivo_generado)
-                elif os.name == 'posix':  # macOS y Linux
-                    import subprocess
-                    subprocess.call(['xdg-open', archivo_generado])
+                if respuesta == QMessageBox.StandardButton.Yes:
+                    if os.name == 'nt':  # Windows
+                        os.startfile(archivo_generado)
+                    elif os.name == 'posix':  # macOS y Linux
+                        import subprocess
+                        subprocess.call(['xdg-open', archivo_generado])
+
+            except Exception as e:
+                # *** RESTAURAR CURSOR EN CASO DE ERROR ***
+                QApplication.restoreOverrideCursor()
+                raise e
 
         except ValueError as ve:
-            QApplication.restoreOverrideCursor()
-            QMessageBox.warning(
+            QMessageBox.warning(self, "Sin Datos", str(ve))
+
+        except Exception as e:
+            QMessageBox.critical(
                 self,
-                "Sin Datos",
-                str(ve)
+                "Error al Generar Reporte",
+                f"Ocurrió un error al generar el reporte PDF:\n\n{str(e)}"
             )
 
         except Exception as e:

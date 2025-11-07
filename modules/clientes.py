@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QHBoxLayout, QLabel, QPush
 from PyQt6.QtGui import QPixmap, QPalette, QColor, QRegularExpressionValidator
 from PyQt6.QtCore import Qt, QRegularExpression
 import mysql.connector
-
+from reportes_clientes import ReportesClientesWindow
 from conexion import ConexionBD
 
 class ClientesWindow(QMainWindow):
@@ -137,15 +137,18 @@ class ClientesWindow(QMainWindow):
         self.actualizar_btn = QPushButton("✏️ Actualizar Seleccionado")
         self.eliminar_btn = QPushButton("❌ Desactivar Seleccionado")
         self.limpiar_btn = QPushButton("✨ Limpiar Campos")
+        self.btn_reportes = QPushButton("📊 Ver Reportes")
         
         self.agregar_btn.setStyleSheet(self.style_primary_button)
         self.actualizar_btn.setStyleSheet(self.style_header_button)
         self.eliminar_btn.setStyleSheet(self.style_danger_button)
         self.limpiar_btn.setStyleSheet(self.style_header_button)
+        self.btn_reportes.setStyleSheet(self.style_header_button)
 
         action_layout.addWidget(self.agregar_btn)
         action_layout.addWidget(self.actualizar_btn)
         action_layout.addWidget(self.eliminar_btn)
+        action_layout.addWidget(self.btn_reportes)
         action_layout.addStretch()
         action_layout.addWidget(self.limpiar_btn)
         form_layout.addLayout(action_layout)
@@ -156,6 +159,12 @@ class ClientesWindow(QMainWindow):
         self.actualizar_btn.clicked.connect(self.actualizar_cliente)
         self.eliminar_btn.clicked.connect(self.desactivar_cliente)
         self.limpiar_btn.clicked.connect(self.limpiar_campos)
+        self.btn_reportes.clicked.connect(self.abrir_reportes_clientes)
+
+    def abrir_reportes_clientes(self):
+        self.ventana_reportes = ReportesClientesWindow(self)
+        self.ventana_reportes.show()
+        self.hide()
 
     def _setup_search_bar(self):
         """Crea la barra de búsqueda dinámica."""
