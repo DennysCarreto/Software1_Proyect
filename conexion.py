@@ -13,7 +13,7 @@ class ConexionBD:
                     host='localhost',
                     user='root',
                     password='root',
-                    database='dbfarmaplus'
+                    database='dbfarmaplus2'
                 )
             except Error as e:
                 print(f"❌ Error al conectar: {e}")

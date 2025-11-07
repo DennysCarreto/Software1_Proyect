@@ -16,7 +16,6 @@ from conexion import ConexionBD
 
 # --- La clase ProductDialog permanece igual ---
 class ProductDialog(QDialog):
-    # ### <<< INICIO: MODIFICACIONES PARA CATEGORÍA >>> ###
     def __init__(self, parent=None, product_data=None, proveedores=None, categorias=None): # Añadido categorias
         super().__init__(parent)
         self.setWindowTitle("Registrar / Editar Producto")
@@ -425,6 +424,7 @@ class InventarioWindow(QMainWindow):
         
         if show_notifications_on_start:
             self.toggle_notification_panel()
+   
 
     def _create_stylesheets(self):
         """Método central para definir todos los estilos de la ventana."""

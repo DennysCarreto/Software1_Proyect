@@ -1,7 +1,7 @@
 import sys
 from PyQt6.QtWidgets import (QMainWindow, QVBoxLayout, QLabel, QPushButton, QWidget, 
                              QLineEdit, QTableWidget, QMessageBox, QTableWidgetItem,
-                             QHBoxLayout, QFrame, QFormLayout, QHeaderView)
+                             QHBoxLayout, QFrame, QFormLayout, QHeaderView, QApplication)
 from PyQt6.QtGui import QPalette, QColor, QFont, QRegularExpressionValidator 
 from PyQt6.QtCore import Qt, QRegularExpression 
 
@@ -43,7 +43,7 @@ class ProveedoresWindow(QMainWindow):
         
         self._setup_table()
 
-        self.mostrar_proveedores() # Cargar datos al iniciar
+        self.mostrar_proveedores()
 
     def _create_stylesheets(self):
         """Método central para definir todos los estilos de la ventana."""
