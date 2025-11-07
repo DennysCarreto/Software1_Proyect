@@ -12,9 +12,15 @@ class ConexionBD:
                 ConexionBD._conexion = mysql.connector.connect(
                     host='localhost',
                     user='root',
+<<<<<<< HEAD
                     password='root',
                     database='dbfarmaplus2'
+=======
+                    password='1234',
+                    database='dbfarmaplus'
+>>>>>>> 41685c9a13330d51e67dec6b498974b3f9407c23
                 )
+                print("✅ Conexión establecida.")
             except Error as e:
                 print(f"❌ Error al conectar: {e}")
                 ConexionBD._conexion = None
@@ -26,3 +32,13 @@ class ConexionBD:
             ConexionBD._conexion.close()
             print("🔌 Conexión cerrada.")
             ConexionBD._conexion = None
+
+# """ Probar si la conexion es exitosa"""
+# if __name__ == "__main__":
+#     conexion = ConexionBD.obtener_conexion()
+#     if conexion and conexion.is_connected():
+#         print("Exitoso")
+#         input('Press enter to continue...')
+#     else: print("Fallida")
+
+#     ConexionBD.cerrar_conexion()
