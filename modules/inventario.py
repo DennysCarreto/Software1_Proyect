@@ -2,17 +2,17 @@ import sys
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, QLabel, QLineEdit, 
                              QVBoxLayout, QHBoxLayout, QWidget, QTableWidget, QTableWidgetItem, 
                              QDialog, QDateEdit, QMessageBox, QHeaderView, QComboBox, QFrame,
-                             QScrollArea, QSizePolicy, QCompleter, QDialogButtonBox)
-from PyQt6.QtCore import Qt, QDate, QPropertyAnimation, QEasingCurve, pyqtSignal, QRegularExpression, QStringListModel
+                             QScrollArea, QSizePolicy)
+from PyQt6.QtCore import Qt, QDate, QPropertyAnimation, QEasingCurve, pyqtSignal, QRegularExpression
 from PyQt6.QtGui import QPalette, QColor, QIcon, QIntValidator, QDoubleValidator, QRegularExpressionValidator, QFont
 from datetime import datetime, timedelta
 from .categorias_dialog import CategoriasDialog
 from .noti2 import enviar_correo
 
 import os
-import mysql.connector
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from conexion import ConexionBD
+from reportes_inventario_final import ReportesInventarioWindow
 
 # --- La clase ProductDialog permanece igual ---
 class ProductDialog(QDialog):
@@ -312,60 +312,6 @@ class NotificationCard(QFrame):
         button_layout.addWidget(self.dismiss_button)
         main_layout.addLayout(button_layout)
 
-class EmailInputDialog(QDialog):
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("Enviar Alerta por Correo")
-        self.setMinimumWidth(400)
-
-        self.colores = parent.colores if hasattr(parent, 'colores') else {}
-        
-        self.setStyleSheet(f"""
-            QDialog {{ 
-                background-color: {self.colores.get('fondo', '#F8F9FA')}; 
-            }}
-            QLabel {{
-                color: {self.colores.get('texto_principal', '#212529')};
-                font-size: 14px;
-            }}
-        """)
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(10)
-
-        label = QLabel("Ingresa el correo del destinatario:")
-        layout.addWidget(label)
-
-        self.email_input = QLineEdit()
-        self.email_input.setPlaceholderText("ejemplo@correo.com")
-        if hasattr(parent, 'style_input_field'):
-            self.email_input.setStyleSheet(parent.style_input_field)
-        layout.addWidget(self.email_input)
-        
-        self.completer = QCompleter(self)
-        self.completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
-        self.completer.setFilterMode(Qt.MatchFlag.MatchContains)
-        
-        self.email_input.setCompleter(self.completer)
-
-        button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
-        
-        if hasattr(parent, 'style_primary_button'):
-            button_box.button(QDialogButtonBox.StandardButton.Ok).setStyleSheet(parent.style_primary_button)
-        if hasattr(parent, 'style_header_button'):
-             button_box.button(QDialogButtonBox.StandardButton.Cancel).setStyleSheet(parent.style_header_button)
-        
-        button_box.accepted.connect(self.accept)
-        button_box.rejected.connect(self.reject)
-        layout.addWidget(button_box)
-
-    def get_email(self):
-        return self.email_input.text().strip()
-
-    def set_email_suggestions(self, email_list):
-        model = QStringListModel(email_list, self)
-        self.completer.setModel(model)
-
 
 class InventarioWindow(QMainWindow):
     def __init__(self, parent=None, cargo=None, show_notifications_on_start=False):
@@ -485,6 +431,8 @@ class InventarioWindow(QMainWindow):
         header_layout.addWidget(self.notification_button)
         self.main_layout.addWidget(header_frame)
 
+    # Reemplaza esta función completa en modules/inventario.py
+
     def setup_control_panel(self):
         control_frame = QFrame()
         control_frame.setObjectName("ControlFrame")
@@ -492,11 +440,12 @@ class InventarioWindow(QMainWindow):
         control_layout = QVBoxLayout(control_frame)
         control_layout.setSpacing(15)
 
+        # --- Search Layout ---
         search_layout = QHBoxLayout()
         self.nombre_input = QLineEdit(); self.nombre_input.setPlaceholderText("Nombre de Producto")
         self.codigo_input = QLineEdit(); self.codigo_input.setPlaceholderText("Código")
-        self.categoria_filtro_combo = QComboBox() 
-        self.proveedor_combo = QComboBox() 
+        self.categoria_filtro_combo = QComboBox() # Llenado en cargar_categorias
+        self.proveedor_combo = QComboBox() # Llenado en cargar_proveedores
         self.buscar_button = QPushButton("Buscar")
         self.listar_button = QPushButton("Mostrar Todo")
 
@@ -515,12 +464,14 @@ class InventarioWindow(QMainWindow):
         search_layout.addWidget(self.listar_button)
         control_layout.addLayout(search_layout)
 
-       
+        # --- Action Layout ---
         action_layout = QHBoxLayout()
+        # Define botones y asigna a self.
         self.registrar_button = QPushButton("➕ Registrar Producto")
         self.editar_button = QPushButton("✏️ Editar Seleccionado")
         self.eliminar_button = QPushButton("❌ Eliminar Seleccionado")
         self.limpiar_button = QPushButton("🗑️ Limpiar Tabla")
+        self.btn_reportes = QPushButton("📊 Ver Reportes")
         self.gestionar_categorias_btn = QPushButton("📁 Gestionar Categorías")
         # Aplica estilos
         self.registrar_button.setStyleSheet(self.style_primary_button)
@@ -528,15 +479,19 @@ class InventarioWindow(QMainWindow):
         self.eliminar_button.setStyleSheet(self.style_danger_button)
         self.limpiar_button.setStyleSheet(self.style_header_button)
         self.gestionar_categorias_btn.setStyleSheet(self.style_header_button)
+        self.btn_reportes.setStyleSheet(self.style_primary_button)
 
- 
+        # Añade botones al action_layout
         action_layout.addWidget(self.registrar_button)
         action_layout.addWidget(self.editar_button)
         action_layout.addWidget(self.gestionar_categorias_btn)
+        action_layout.addWidget(self.btn_reportes)
         action_layout.addStretch()
         action_layout.addWidget(self.limpiar_button)
         action_layout.addWidget(self.eliminar_button)
-        control_layout.addLayout(action_layout)
+        control_layout.addLayout(action_layout) # Añade action_layout al control_layout
+
+        # Añade todo el control_frame al layout principal de la ventana
         self.main_layout.addWidget(control_frame)
 
       
@@ -545,6 +500,9 @@ class InventarioWindow(QMainWindow):
         self.eliminar_button.clicked.connect(self.eliminar_producto)
         self.limpiar_button.clicked.connect(self.limpiar_tabla_visual)
         self.gestionar_categorias_btn.clicked.connect(self.abrir_gestion_categorias)
+        self.btn_reportes.clicked.connect(self.abrir_reportes_inventario)
+        
+        # Conexiones de botones/campos de búsqueda
         self.buscar_button.clicked.connect(self.buscar_productos_db)
         self.listar_button.clicked.connect(self.listar_todos)
         self.nombre_input.textChanged.connect(self.filtrar_tabla_dinamico)
@@ -552,11 +510,15 @@ class InventarioWindow(QMainWindow):
         self.categoria_filtro_combo.currentIndexChanged.connect(self.filtrar_tabla_dinamico)
         self.proveedor_combo.currentIndexChanged.connect(self.filtrar_tabla_dinamico)
         if self.cargo == 'Empleado':
-            print("DEBUG: Aplicando restricciones para Empleado en Inventario.") 
+            print("DEBUG: Aplicando restricciones para Empleado en Inventario.") # Mensaje de depuración
           
             self.eliminar_button.hide() 
             self.gestionar_categorias_btn.hide()
 
+    def abrir_reportes_inventario(self):
+        self.ventana_reportes = ReportesInventarioWindow(self)
+        self.ventana_reportes.show()
+        self.hide()
 
     def setup_table(self):
         self.table = QTableWidget()
@@ -657,53 +619,6 @@ class InventarioWindow(QMainWindow):
             card.hide()
             self.notification_count -= 1
             self.notification_button.setText(f"🔔 ({self.notification_count})")
-    
-    def get_email_suggestions(self):
-        """Busca en la BD correos para el autocompletado."""
-        emails = set() # Usar un set para evitar duplicados
-        try:
-            conexion = ConexionBD.obtener_conexion()
-            cursor = conexion.cursor(dictionary=True)
-            
-            cursor.execute("SELECT correo FROM usuario WHERE correo IS NOT NULL AND correo != '' AND Activo = 1")
-            for user in cursor.fetchall():
-                emails.add(user['correo'])
-                
-        except mysql.connector.Error as err:
-            # Si la columna no existe, simplemente no mostrará sugerencias, no debe crashear
-            print(f"Advertencia: No se pudieron cargar sugerencias de email. {err}")
-        except Exception as e:
-            print(f"Error cargando sugerencias de email: {e}")
-        finally:
-            if 'conexion' in locals() and conexion.is_connected():
-                cursor.close()
-                conexion.close()
-        
-        print(f"Sugerencias de correo encontradas: {list(emails)}")
-        return list(emails)
-
-    def open_email_dialog(self, asunto, cuerpo_html):
-        """
-        Abre el nuevo diálogo para ingresar el correo y maneja el envío.
-        """
-        email_dialog = EmailInputDialog(parent=self)
-        
-        # Cargar sugerencias de autocompletado
-        sugerencias = self.get_email_suggestions()
-        email_dialog.set_email_suggestions(sugerencias)
-        
-        if email_dialog.exec():
-            destinatario = email_dialog.get_email()
-            if not destinatario:
-                self.mostrar_alerta("Error", "No se ingresó ningún correo electrónico.", tipo="warning")
-                return
-            
-            exito, mensaje = enviar_correo(asunto, cuerpo_html, destinatario)
-            
-            if exito:
-                self.mostrar_alerta("Éxito", mensaje, tipo="information")
-            else:
-                self.mostrar_alerta("Error de Envío", mensaje, tipo="critical")
 
     def handle_email_request_stock(self, alert_data):
         asunto = f"🚨 Alerta de Stock Bajo: {alert_data['nombre']}"
@@ -716,13 +631,10 @@ class InventarioWindow(QMainWindow):
         </ul>
         <p>Por favor, considere realizar un nuevo pedido.</p>
         """
-        self.open_email_dialog(asunto, cuerpo) 
+        self.send_email(asunto, cuerpo)
         
     def handle_email_request_vencimiento(self, alert_data):
-        fecha_vence = alert_data['fVencimiento']
-        if isinstance(fecha_vence, datetime):
-             fecha_vence = fecha_vence.strftime('%d/%m/%Y')
-        
+        fecha_vence = alert_data['fVencimiento'].strftime('%d/%m/%Y')
         asunto = f"🚨 Alerta de Vencimiento: {alert_data['nombre']}"
         cuerpo = f"""
         <h1>Alerta de Inventario</h1>
@@ -732,11 +644,14 @@ class InventarioWindow(QMainWindow):
         </ul>
         <p>Por favor, tome las acciones necesarias (promoción, rotación, etc.).</p>
         """
-        self.open_email_dialog(asunto, cuerpo) #
+        self.send_email(asunto, cuerpo)
 
     def send_email(self, asunto, cuerpo_html):
-        print("send_email está obsoleto, usando open_email_dialog en su lugar.")
-        pass
+        exito, mensaje = enviar_correo(asunto, cuerpo_html)
+        if exito:
+            QMessageBox.information(self, "Correo Enviado", mensaje)
+        else:
+            QMessageBox.critical(self, "Error de Envío", mensaje)
 
     def cargar_categorias(self):
         """Carga las categorías desde la BD y las añade al ComboBox de filtro."""

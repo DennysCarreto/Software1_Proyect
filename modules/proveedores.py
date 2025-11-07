@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt, QRegularExpression
 
 import mysql.connector
 from conexion import ConexionBD
+from reportes_proveedores import ReportesProveedoresWindow
 
 class ProveedoresWindow(QMainWindow):
     def __init__(self, parent=None, cargo=None):
@@ -125,15 +126,18 @@ class ProveedoresWindow(QMainWindow):
         self.actualizar_btn = QPushButton("✏️ Actualizar Seleccionado")
         self.eliminar_btn = QPushButton("❌ Desactivar Seleccionado")
         self.limpiar_btn = QPushButton("✨ Limpiar Campos")
-        
+        self.btn_reportes = QPushButton("📊 Ver Reportes")
+
         self.agregar_btn.setStyleSheet(self.style_primary_button)
         self.actualizar_btn.setStyleSheet(self.style_header_button)
         self.eliminar_btn.setStyleSheet(self.style_danger_button)
         self.limpiar_btn.setStyleSheet(self.style_header_button)
+        self.btn_reportes.setStyleSheet(self.style_primary_button)
 
         action_layout.addWidget(self.agregar_btn)
         action_layout.addWidget(self.actualizar_btn)
         action_layout.addWidget(self.eliminar_btn)
+        action_layout.addWidget(self.btn_reportes)
         action_layout.addStretch()
         action_layout.addWidget(self.limpiar_btn)
         form_layout.addLayout(action_layout)
@@ -143,6 +147,7 @@ class ProveedoresWindow(QMainWindow):
         self.actualizar_btn.clicked.connect(self.actualizar_proveedor)
         self.eliminar_btn.clicked.connect(self.desactivar_proveedor)
         self.limpiar_btn.clicked.connect(self.limpiar_campos)
+        self.btn_reportes.clicked.connect(self.abrir_reportes_proveedores)
         
         if self.cargo == 'Empleado':
             print("DEBUG: Aplicando restricciones para Empleado en Proveedores.")
@@ -151,6 +156,10 @@ class ProveedoresWindow(QMainWindow):
             self.actualizar_btn.hide()
             self.eliminar_btn.hide()
 
+    def abrir_reportes_proveedores(self):
+        self.ventana_reportes = ReportesProveedoresWindow(self)
+        self.ventana_reportes.show()
+        self.hide()
 
     def _setup_search_bar(self):
         search_frame = QFrame()

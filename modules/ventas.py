@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import QFileDialog
 from reporte_ventas_pdf import generar_reporte_ventas_pdf
 from datetime import datetime
 import os
+from generador_factura_pdf import generar_factura_venta_pdf
 
 class NuevaVentaDialog(QDialog):
     def __init__(self, clientes, productos, parent=None):
@@ -558,7 +559,7 @@ class VentasWindow(QMainWindow):
         self.ver_detalles_btn = QPushButton("📋 Ver Detalles de Venta")
         self.ver_detalles_btn.setStyleSheet(self.style_header_button)
 
-        # *** NUEVO BOTÓN PARA GENERAR REPORTE PDF ***
+        # Botón para generar reporte PDF general
         self.generar_reporte_btn = QPushButton("📄 Generar Reporte PDF")
         self.generar_reporte_btn.setStyleSheet("""
             QPushButton { 
@@ -575,15 +576,33 @@ class VentasWindow(QMainWindow):
         """)
         self.generar_reporte_btn.clicked.connect(self.generar_reporte_pdf)
 
+        # *** NUEVO BOTÓN PARA GENERAR FACTURA DE VENTA INDIVIDUAL ***
+        self.generar_factura_btn = QPushButton("🧾 Generar Factura")
+        self.generar_factura_btn.setStyleSheet("""
+            QPushButton { 
+                background-color: #9B59B6; 
+                color: white;
+                border: none; 
+                border-radius: 5px; 
+                padding: 10px; 
+                font-weight: bold;
+            } 
+            QPushButton:hover { 
+                background-color: #8E44AD; 
+            }
+        """)
+        self.generar_factura_btn.clicked.connect(self.generar_factura_venta)
+
         action_layout.addWidget(self.nueva_venta_btn)
         action_layout.addWidget(self.ver_detalles_btn)
-        action_layout.addWidget(self.generar_reporte_btn)  # Agregar el nuevo botón
+        action_layout.addWidget(self.generar_reporte_btn)
+        action_layout.addWidget(self.generar_factura_btn)  # Agregar el nuevo botón
         action_layout.addStretch()
         control_layout.addLayout(action_layout)
 
         self.main_layout.addWidget(control_frame)
 
-        # Conexiones (mantener las existentes y agregar la nueva)
+        # Conexiones (mantener las existentes)
         self.buscar_btn.clicked.connect(self.buscar_ventas)
         self.nueva_venta_btn.clicked.connect(self.nueva_venta)
         self.ver_detalles_btn.clicked.connect(self.ver_detalles_venta)
@@ -907,7 +926,6 @@ class VentasWindow(QMainWindow):
             # Construir filtros actuales
             filtros = {}
 
-            # Solo agregar filtros si hay valores
             fecha_inicio = self.fecha_inicio.date().toString("yyyy-MM-dd")
             fecha_fin = self.fecha_fin.date().toString("yyyy-MM-dd")
 
@@ -932,45 +950,50 @@ class VentasWindow(QMainWindow):
             )
 
             if not archivo:
-                # Usuario canceló
                 return
 
-            # Asegurar que tenga extensión .pdf
             if not archivo.lower().endswith('.pdf'):
                 archivo += '.pdf'
 
-            # Mostrar cursor de espera
+            # *** MOVER EL CURSOR DE ESPERA AQUÍ ***
             QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
 
-            # Generar el reporte
-            archivo_generado = generar_reporte_ventas_pdf(filtros, archivo)
+            try:
+                # Generar el reporte
+                archivo_generado = generar_reporte_ventas_pdf(filtros, archivo)
 
-            # Restaurar cursor
-            QApplication.restoreOverrideCursor()
+                # *** RESTAURAR CURSOR DENTRO DEL TRY ***
+                QApplication.restoreOverrideCursor()
 
-            # Preguntar si desea abrir el archivo
-            respuesta = QMessageBox.question(
-                self,
-                "Reporte Generado",
-                f"El reporte se ha generado exitosamente en:\n{archivo_generado}\n\n¿Desea abrir el archivo?",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes
-            )
+                # Preguntar si desea abrir el archivo
+                respuesta = QMessageBox.question(
+                    self,
+                    "Reporte Generado",
+                    f"El reporte se ha generado exitosamente en:\n{archivo_generado}\n\n¿Desea abrir el archivo?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
 
-            if respuesta == QMessageBox.StandardButton.Yes:
-                # Abrir el PDF con el visor predeterminado del sistema
-                if os.name == 'nt':  # Windows
-                    os.startfile(archivo_generado)
-                elif os.name == 'posix':  # macOS y Linux
-                    import subprocess
-                    subprocess.call(['xdg-open', archivo_generado])
+                if respuesta == QMessageBox.StandardButton.Yes:
+                    if os.name == 'nt':  # Windows
+                        os.startfile(archivo_generado)
+                    elif os.name == 'posix':  # macOS y Linux
+                        import subprocess
+                        subprocess.call(['xdg-open', archivo_generado])
+
+            except Exception as e:
+                # *** RESTAURAR CURSOR EN CASO DE ERROR ***
+                QApplication.restoreOverrideCursor()
+                raise e
 
         except ValueError as ve:
-            QApplication.restoreOverrideCursor()
-            QMessageBox.warning(
+            QMessageBox.warning(self, "Sin Datos", str(ve))
+
+        except Exception as e:
+            QMessageBox.critical(
                 self,
-                "Sin Datos",
-                str(ve)
+                "Error al Generar Reporte",
+                f"Ocurrió un error al generar el reporte PDF:\n\n{str(e)}"
             )
 
         except Exception as e:
@@ -979,6 +1002,82 @@ class VentasWindow(QMainWindow):
                 self,
                 "Error al Generar Reporte",
                 f"Ocurrió un error al generar el reporte PDF:\n\n{str(e)}"
+            )
+
+    def generar_factura_venta(self):
+        """
+        Genera una factura en PDF para la venta seleccionada
+        """
+        # Verificar que haya una venta seleccionada
+        selected = self.ventas_table.selectedItems()
+        if not selected:
+            QMessageBox.warning(self, "Advertencia", "Seleccione una venta para generar la factura.")
+            return
+
+        # Obtener ID de la venta seleccionada
+        venta_id = self.ventas_table.item(selected[0].row(), 0).text()
+        fecha = self.ventas_table.item(selected[0].row(), 1).text()
+
+        try:
+            # Diálogo para seleccionar ubicación del archivo
+            opciones = QFileDialog.Option.DontUseNativeDialog
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nombre_sugerido = f"factura_venta_{venta_id}_{timestamp}.pdf"
+
+            archivo, _ = QFileDialog.getSaveFileName(
+                self,
+                "Guardar Factura de Venta",
+                nombre_sugerido,
+                "Archivos PDF (*.pdf);;Todos los archivos (*)",
+                options=opciones
+            )
+
+            if not archivo:
+                return
+
+            if not archivo.lower().endswith('.pdf'):
+                archivo += '.pdf'
+
+            # Mostrar cursor de espera
+            QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+
+            try:
+                # Generar la factura
+                archivo_generado = generar_factura_venta_pdf(venta_id, archivo)
+
+                # Restaurar cursor
+                QApplication.restoreOverrideCursor()
+
+                # Preguntar si desea abrir el archivo
+                respuesta = QMessageBox.question(
+                    self,
+                    "Factura Generada",
+                    f"La factura se ha generado exitosamente en:\n{archivo_generado}\n\n¿Desea abrir el archivo?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                    QMessageBox.StandardButton.Yes
+                )
+
+                if respuesta == QMessageBox.StandardButton.Yes:
+                    if os.name == 'nt':  # Windows
+                        os.startfile(archivo_generado)
+                    elif os.name == 'posix':  # macOS y Linux
+                        import subprocess
+                        subprocess.call(['xdg-open', archivo_generado])
+
+            except Exception as e:
+                # Restaurar cursor en caso de error
+                QApplication.restoreOverrideCursor()
+                raise e
+
+        except ValueError as ve:
+            QMessageBox.warning(self, "Sin Datos", str(ve))
+
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(
+                self,
+                "Error al Generar Factura",
+                f"Ocurrió un error al generar la factura PDF:\n\n{str(e)}"
             )
 
 
